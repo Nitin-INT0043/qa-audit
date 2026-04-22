@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Call Audit QA Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css"/>
+<style>
+  :root {
+    --bg-primary: #0f1117;
+    --bg-card: #1a1d27;
+    --bg-card2: #1e2130;
+    --border: #2a2d3e;
+    --text-primary: #e2e8f0;
+    --text-muted: #8892a4;
+    --accent: #6366f1;
+    --accent2: #818cf8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Inter', -apple-system, sans-serif; min-height: 100vh; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-primary); }
+  ::-webkit-scrollbar-thumb { background: #2a2d3e; border-radius: 3px; }
+
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; }
+  .card2 { background: var(--bg-card2); border: 1px solid var(--border); border-radius: 8px; }
+
+  .kpi-card { position: relative; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; }
+  .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
+  .kpi-glow { position: absolute; top: -30px; right: -30px; width: 100px; height: 100px; border-radius: 50%; opacity: 0.08; filter: blur(20px); }
+
+  .score-green { color: #10b981; }
+  .score-yellow { color: #f59e0b; }
+  .score-red { color: #ef4444; }
+
+  .mood-positive { color: #10b981; }
+  .mood-neutral { color: #60a5fa; }
+  .mood-frustrated { color: #f97316; }
+  .mood-angry { color: #ef4444; }
+  .mood-distressed { color: #a855f7; }
+
+  #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+  .toast { padding: 12px 16px; border-radius: 8px; font-size: 14px; min-width: 280px; animation: slideIn 0.3s ease; display: flex; align-items: center; gap: 10px; }
+  .toast-error { background: #2d1b1b; border: 1px solid #7f1d1d; color: #fca5a5; }
+  .toast-success { background: #1b2d1f; border: 1px solid #14532d; color: #86efac; }
+  .toast-info { background: #1b1f2d; border: 1px solid #1e3a5f; color: #93c5fd; }
+  @keyframes slideIn { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
+  @keyframes fadeOut { from{opacity:1} to{opacity:0} }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #13151f; color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 14px; border-bottom: 1px solid #1e2130; font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  tr.data-row:hover td { background: rgba(99,102,241,0.04); cursor: pointer; }
+  th.sortable:hover { color: var(--accent2); cursor: pointer; }
+  th.sort-asc::after { content: ' ↑'; color: var(--accent2); }
+  th.sort-desc::after { content: ' ↓'; color: var(--accent2); }
+
+  .score-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .score-bar-bg { flex: 1; height: 6px; background: #1e2130; border-radius: 3px; overflow: hidden; }
+  .score-bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+
+  .expanded-row td { padding: 0; }
+  .expanded-content { padding: 16px; background: #13151f; border-top: 1px solid var(--border); animation: expandDown 0.2s ease; }
+  @keyframes expandDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+
+  .flatpickr-calendar { background: #1a1d27 !important; border: 1px solid #2a2d3e !important; border-radius: 10px !important; box-shadow: 0 10px 40px rgba(0,0,0,0.5) !important; }
+  .flatpickr-day { color: #e2e8f0 !important; }
+  .flatpickr-day.selected { background: #6366f1 !important; border-color: #6366f1 !important; }
+  .flatpickr-day:hover { background: #2a2d3e !important; }
+  .flatpickr-months { background: #13151f !important; border-radius: 10px 10px 0 0 !important; }
+  .flatpickr-month, .flatpickr-weekdays, span.flatpickr-weekday { color: #8892a4 !important; background: transparent !important; }
+  .flatpickr-current-month input.cur-year, .flatpickr-current-month .flatpickr-monthDropdown-months { color: #e2e8f0 !important; background: transparent !important; }
+  .numInputWrapper:hover { background: transparent !important; }
+  .flatpickr-prev-month, .flatpickr-next-month { color: #8892a4 !important; fill: #8892a4 !important; }
+
+  .filter-input { background: var(--bg-card2); border: 1px solid var(--border); color: var(--text-primary); border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; transition: border-color 0.2s; }
+  .filter-input:focus { border-color: var(--accent); }
+  select.filter-input option { background: #1a1d27; }
+
+  .btn-primary { background: #6366f1; color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s, transform 0.1s; display: flex; align-items: center; gap: 6px; }
+  .btn-primary:hover { background: #818cf8; }
+  .btn-primary:active { transform: scale(0.97); }
+  .btn-ghost { background: var(--bg-card2); color: var(--text-muted); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
+  .btn-ghost:hover { background: #252838; color: var(--text-primary); }
+
+  .page-btn { min-width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card2); color: var(--text-muted); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .page-btn:hover:not(:disabled) { background: #252838; color: white; }
+  .page-btn.active { background: #6366f1; border-color: #6366f1; color: white; }
+  .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+
+  .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: capitalize; }
+  .badge-green { background: rgba(16,185,129,0.15); color: #10b981; }
+  .badge-yellow { background: rgba(245,158,11,0.15); color: #f59e0b; }
+  .badge-red { background: rgba(239,68,68,0.15); color: #ef4444; }
+  .badge-blue { background: rgba(96,165,250,0.15); color: #60a5fa; }
+  .badge-purple { background: rgba(168,85,247,0.15); color: #a855f7; }
+  .badge-orange { background: rgba(249,115,22,0.15); color: #f97316; }
+  .badge-gray { background: rgba(148,163,184,0.1); color: #94a3b8; }
+
+  .qa-form { margin-top: 16px; padding: 16px; background: #1a1d27; border: 1px solid var(--border); border-radius: 10px; }
+  .qa-form label { font-size: 12px; font-weight: 600; color: #8892a4; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; }
+  .qa-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 3px; background: #1e2130; outline: none; }
+  .qa-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; cursor: pointer; border: 2px solid #0f1117; }
+  .qa-slider.green::-webkit-slider-thumb { background: #10b981; }
+  .qa-slider.yellow::-webkit-slider-thumb { background: #f59e0b; }
+  .qa-slider.red::-webkit-slider-thumb { background: #ef4444; }
+  .qa-textarea { width: 100%; background: var(--bg-card2); border: 1px solid var(--border); color: var(--text-primary); border-radius: 8px; padding: 10px 12px; font-size: 13px; outline: none; resize: vertical; min-height: 60px; font-family: inherit; transition: border-color 0.2s; }
+  .qa-textarea:focus { border-color: var(--accent); }
+  .toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #2a2d3e; border-radius: 22px; transition: 0.3s; }
+  .toggle-slider::before { content: ''; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: #8892a4; border-radius: 50%; transition: 0.3s; }
+  .toggle-switch input:checked + .toggle-slider { background: #ef4444; }
+  .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); background: white; }
+  .btn-submit-score { background: #10b981; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s, transform 0.1s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-submit-score:hover { background: #059669; }
+  .btn-submit-score:active { transform: scale(0.97); }
+  .btn-submit-score:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-submit-score.dispute { background: #ef4444; }
+  .btn-submit-score.dispute:hover { background: #dc2626; }
+
+  @media(max-width:768px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    .chart-row { grid-template-columns: 1fr !important; }
+  }
+  @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+
+  /* Listen button in table */
+  .btn-listen {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(99,102,241,0.12); color: #818cf8;
+    border: 1px solid rgba(99,102,241,0.25);
+    border-radius: 6px; padding: 4px 10px; font-size: 11px;
+    font-weight: 600; cursor: pointer; transition: all 0.15s;
+  }
+  .btn-listen:hover { background: rgba(99,102,241,0.22); color: #a5b4fc; }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(6px); z-index: 1000;
+    display: none; align-items: flex-start; justify-content: center;
+    padding: 40px 20px; overflow-y: auto;
+    animation: modalFadeIn 0.2s ease;
+  }
+  .modal-backdrop.open { display: flex; }
+  @keyframes modalFadeIn { from{opacity:0} to{opacity:1} }
+  .modal-box {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; max-width: 780px; width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    animation: modalSlideUp 0.3s ease;
+  }
+  @keyframes modalSlideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .modal-header {
+    padding: 20px 24px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .modal-close {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-muted); width: 32px; height: 32px;
+    border-radius: 8px; cursor: pointer; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .modal-close:hover { background: var(--bg-card2); color: var(--text-primary); }
+  .modal-body { padding: 22px 24px; display: flex; flex-direction: column; gap: 18px; }
+  .audio-wrap {
+    background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(129,140,248,0.04));
+    border: 1px solid rgba(99,102,241,0.2);
+    border-radius: 12px; padding: 18px;
+  }
+  .audio-wrap audio {
+    width: 100%; height: 40px;
+    border-radius: 8px; outline: none;
+  }
+  .audio-wrap audio::-webkit-media-controls-panel { background: #1e2130; }
+  .field-label {
+    font-size: 11px; color: #8892a4; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-bottom: 6px; font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div id="toast-container"></div>
+
+<!-- Call Detail Modal -->
+<div class="modal-backdrop" id="call-modal" onclick="closeCallDetail(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <div style="font-size:11px;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;">Call Detail</div>
+        <div id="modal-title" style="font-size:18px;font-weight:700;color:#e2e8f0;margin-top:2px;">—</div>
+      </div>
+      <button class="modal-close" onclick="closeCallDetail()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- Score Breakdown Modal -->
+<div class="modal-backdrop" id="score-modal" onclick="closeScoreBreakdown(event)">
+  <div class="modal-box" onclick="event.stopPropagation()" style="max-width:640px;">
+    <div class="modal-header">
+      <div>
+        <div style="font-size:11px;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;">AI Score Breakdown</div>
+        <div id="score-modal-title" style="font-size:18px;font-weight:700;color:#e2e8f0;margin-top:2px;">—</div>
+      </div>
+      <button class="modal-close" onclick="closeScoreBreakdown()">✕</button>
+    </div>
+    <div class="modal-body" id="score-modal-body"></div>
+  </div>
+</div>
+
+<header style="background:#13151f;border-bottom:1px solid #1e2130;position:sticky;top:0;z-index:100;">
+  <div style="max-width:1600px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="width:36px;height:36px;background:linear-gradient(135deg,#6366f1,#818cf8);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8 19.79 19.79 0 01.03 1.18 2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z"/></svg>
+      </div>
+      <div>
+        <div style="font-size:16px;font-weight:700;color:#e2e8f0;">Call Audit QA</div>
+        <div style="font-size:11px;color:#8892a4;display:flex;align-items:center;gap:5px;"><span class="pulse-dot"></span> Local data · <span id="record-count">0</span> records</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8892a4" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <input type="text" id="date-from" placeholder="From date" class="filter-input" style="width:120px;"/>
+        <span style="color:#8892a4;font-size:12px;">→</span>
+        <input type="text" id="date-to" placeholder="To date" class="filter-input" style="width:120px;"/>
+      </div>
+      <select id="filter-mood" class="filter-input">
+        <option value="">All Moods</option>
+        <option value="positive">Positive</option>
+        <option value="neutral">Neutral</option>
+        <option value="frustrated">Frustrated</option>
+        <option value="angry">Angry</option>
+        <option value="distressed">Distressed</option>
+      </select>
+      <select id="filter-resolution" class="filter-input">
+        <option value="">All Resolutions</option>
+        <option value="resolved">Resolved</option>
+        <option value="unresolved">Unresolved</option>
+        <option value="escalated">Escalated</option>
+        <option value="partially_resolved">Partially Resolved</option>
+        <option value="callback_promised">Callback Promised</option>
+      </select>
+      <button class="btn-primary" onclick="refreshAll(true)" id="refresh-btn">
+        <svg id="refresh-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+        Refresh
+      </button>
+    </div>
+  </div>
+</header>
+
+<main style="max-width:1600px;margin:0 auto;padding:24px;display:flex;flex-direction:column;gap:24px;">
+
+  <div class="kpi-grid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:16px;" id="kpi-section">
+    <div class="card kpi-card" id="kpi-total"></div>
+    <div class="card kpi-card" id="kpi-ai"></div>
+    <div class="card kpi-card" id="kpi-human"></div>
+    <div class="card kpi-card" id="kpi-resolved"></div>
+    <div class="card kpi-card" id="kpi-pending"></div>
+    <div class="card kpi-card" id="kpi-escalated"></div>
+  </div>
+
+  <div class="chart-row" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div class="card" style="padding:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#e2e8f0;">Mood Distribution</div>
+          <div style="font-size:11px;color:#8892a4;margin-top:2px;">Customer sentiment breakdown</div>
+        </div>
+        <div style="width:8px;height:8px;border-radius:50%;background:#6366f1;"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:20px;">
+        <div style="width:180px;height:180px;flex-shrink:0;position:relative;">
+          <canvas id="moodChart"></canvas>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
+            <div style="font-size:20px;font-weight:800;color:#e2e8f0;" id="mood-total-num">—</div>
+            <div style="font-size:10px;color:#8892a4;">Total</div>
+          </div>
+        </div>
+        <div id="mood-legend" style="flex:1;display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </div>
+    <div class="card" style="padding:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#e2e8f0;">Resolution Breakdown</div>
+          <div style="font-size:11px;color:#8892a4;margin-top:2px;">Call outcome distribution</div>
+        </div>
+        <div style="width:8px;height:8px;border-radius:50%;background:#10b981;"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:20px;">
+        <div style="width:180px;height:180px;flex-shrink:0;position:relative;">
+          <canvas id="resolutionChart"></canvas>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
+            <div style="font-size:20px;font-weight:800;color:#e2e8f0;" id="res-total-num">—</div>
+            <div style="font-size:10px;color:#8892a4;">Total</div>
+          </div>
+        </div>
+        <div id="resolution-legend" style="flex:1;display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="padding:20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <div style="font-size:14px;font-weight:700;color:#e2e8f0;">Sentiment Trend</div>
+        <div style="font-size:11px;color:#8892a4;margin-top:2px;">Opening · Middle · Closing sentiment over time</div>
+      </div>
+      <div style="display:flex;gap:12px;">
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:#8892a4;"><span style="width:12px;height:3px;background:#6366f1;border-radius:2px;display:inline-block;"></span>Opening</span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:#8892a4;"><span style="width:12px;height:3px;background:#10b981;border-radius:2px;display:inline-block;"></span>Middle</span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:#8892a4;"><span style="width:12px;height:3px;background:#f59e0b;border-radius:2px;display:inline-block;"></span>Closing</span>
+      </div>
+    </div>
+    <div style="height:200px;position:relative;">
+      <canvas id="sentimentChart" style="position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
+    </div>
+  </div>
+
+  <div class="card" style="padding:20px;">
+    <div style="margin-bottom:16px;">
+      <div style="font-size:14px;font-weight:700;color:#e2e8f0;">Issue Category Breakdown</div>
+      <div style="font-size:11px;color:#8892a4;margin-top:2px;">Top call categories by volume</div>
+    </div>
+    <div style="height:220px;position:relative;">
+      <canvas id="issuesChart" style="position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
+    </div>
+  </div>
+
+  <div class="card" style="padding:20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <div style="font-size:14px;font-weight:700;color:#e2e8f0;">Agent Leaderboard</div>
+        <div style="font-size:11px;color:#8892a4;margin-top:2px;" id="agent-count-label">Loading agents...</div>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table id="agents-table">
+        <thead>
+          <tr>
+            <th style="width:40px;">#</th>
+            <th class="sortable" data-col="agent_name">Agent</th>
+            <th class="sortable" data-col="total_calls" style="text-align:right;">Calls</th>
+            <th class="sortable" data-col="avg_score">Avg Score</th>
+            <th class="sortable" data-col="resolved_pct" style="text-align:right;">Resolved %</th>
+            <th class="sortable" data-col="avg_mood_score" style="text-align:right;">Mood Score</th>
+          </tr>
+        </thead>
+        <tbody id="agents-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="padding:20px;" id="calls-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <div style="font-size:14px;font-weight:700;color:#e2e8f0;">Recent Calls</div>
+        <div style="font-size:11px;color:#8892a4;margin-top:2px;" id="calls-count-label">Click row to expand details</div>
+      </div>
+      <div style="font-size:12px;color:#8892a4;">Page <span id="calls-page-label">1</span></div>
+    </div>
+    <div id="kpi-filter-banner" style="display:none;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid #2a2d3e;border-radius:8px;padding:8px 14px;margin-bottom:14px;"></div>
+    <div style="overflow-x:auto;">
+      <table id="calls-table">
+        <thead>
+          <tr>
+            <th>Call ID</th>
+            <th>Agent</th>
+            <th>Direction</th>
+            <th>Duration</th>
+            <th>Category</th>
+            <th>Mood</th>
+            <th>Resolution</th>
+            <th>AI Score</th>
+            <th>Human Score</th>
+            <th>Status</th>
+            <th>Date</th>
+            <th style="width:80px;">Action</th>
+          </tr>
+        </thead>
+        <tbody id="calls-tbody"></tbody>
+      </table>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;flex-wrap:wrap;gap:10px;">
+      <div style="font-size:12px;color:#8892a4;" id="pagination-info">—</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;" id="pagination-btns"></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ═══════════════════════════════════════════════
+// EMBEDDED DATA (loaded from CSV export)
+// ═══════════════════════════════════════════════
+const DATA = [{"id": 10.0, "external_call_id": "CALL-100073", "agent_id": 1.0, "agent_name": "Aryan", "agent_email": "aryan@shiprocket.com", "company_id": 100.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/f50ef7c5-13e4-47b1-8b72-b6f52305ad70.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer called regarding a negative balance issue with their account, expressing frustration over a delay in resolution. The agent acknowledged the issue and suggested waiting a few days for a potential technical glitch to resolve itself. The customer mentioned having already raised a ticket and was unhappy with the lack of communication. The agent promised to escalate the issue and ensure a callback the next day.", "issue_category": "Refund Status", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": ["dustbin"], "order_ids": ["303048481581"]}, "sentiment_opening": 0.2, "sentiment_middle": -0.3, "sentiment_closing": 0.1, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": ["I already raised a ticket", "it might be a technical error"], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 63.0, "human_score": 91.0, "human_score_by_id": 1.0, "score_details": {"total": 63, "call_closure": 5, "empathy_tone": 10, "call_efficiency": 3, "problem_solving": 10, "active_listening": 7, "opening_greeting": 8, "product_knowledge": 10, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": ["negative_mood_unresolved"], "compliance_flags": [], "sop_compliance": null, "audit_status": "human_reviewed", "qa_remarks": "AI score is incorrect, agent handled well", "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-03-25 12:56:05", "analyzed_at": "2026-03-25 12:56:15", "created_at": "2026-03-25 12:56:00", "updated_at": "2026-03-26 12:58:09"}, {"id": 11.0, "external_call_id": "CALL-100080", "agent_id": 2.0, "agent_name": "Sahil Kashyap", "agent_email": "sahil.kashyap@shiprocket.com", "company_id": 101.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/ddf6e7a4-c884-4f40-a73a-5d79affce2dd.wav", "duration_seconds": 121.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer is frustrated due to a delivery issue caused by an incorrect phone number provided by the seller. They have been waiting for a week for their order and are unable to get in touch with the delivery agent. The agent offers to escalate the issue but cannot provide the customer's phone number or the delivery address due to company policy, leading to further frustration from the customer.", "issue_category": "Shipment Delay - In Transit", "key_entities": {"awbs": ["486752", "2758019794"], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": -0.5, "sentiment_middle": -0.8, "sentiment_closing": -0.6, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": ["I'm really fed up from morning reaching out to other person I'm not able to get a proper answer.", "I'm begging you, because this is really important for me something I have to set up."], "agent_tone": "defensive", "resolution_status": "unresolved", "ai_score": 43.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 43, "call_closure": 4, "empathy_tone": 5, "call_efficiency": 3, "problem_solving": 5, "active_listening": 6, "opening_greeting": 5, "product_knowledge": 7, "compliance_adherence": 8, "hold_transfer_protocol": 0}, "alert_flags": ["negative_mood_unresolved", "low_qa_score"], "compliance_flags": [], "sop_compliance": null, "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-03-25 18:45:45", "analyzed_at": "2026-03-25 18:45:54", "created_at": "2026-03-25 18:45:37", "updated_at": "2026-03-25 18:45:54"}, {"id": 12.0, "external_call_id": "CALL-100087", "agent_id": 2.0, "agent_name": "Tushar Rastogi", "agent_email": "tushar.rastogi@shiprocket.com", "company_id": 101.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/f50ef7c5-13e4-47b1-8b72-b6f52305ad70.wav", "duration_seconds": 121.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer called regarding a delay in the delivery of their order, expressing frustration over the extended wait time. The agent attempted to gather information about the issue and provided a ticket ID for follow-up. The customer also mentioned a technical error related to a negative balance, which the agent suggested might resolve itself in a few days. The call ended with the agent promising to escalate the issue and ensure a callback.", "issue_category": "Shipment Delay - In Transit", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": ["washing machine"], "order_ids": []}, "sentiment_opening": -0.5, "sentiment_middle": -0.3, "sentiment_closing": 0.0, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": ["I think it's a technical error", "that is wrong"], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 58.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 58, "call_closure": 5, "empathy_tone": 10, "call_efficiency": 3, "problem_solving": 10, "active_listening": 7, "opening_greeting": 5, "product_knowledge": 8, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": ["negative_mood_unresolved"], "compliance_flags": [], "sop_compliance": null, "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-03-26 18:42:11", "analyzed_at": "2026-03-26 18:42:20", "created_at": "2026-03-26 18:42:05", "updated_at": "2026-03-26 18:42:20"}, {"id": 13.0, "external_call_id": "CALL-100094", "agent_id": 2.0, "agent_name": "Kartik Sood", "agent_email": "kartik.sood@shiprocket.com", "company_id": 102.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/7cf902dd-ab07-44ae-ad9c-6588dcabc493.wav", "duration_seconds": 121.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer is experiencing an issue with a shipping order that has not been picked up despite waiting all day. The agent acknowledges the concern and offers to transfer the pickup date over the phone. The call ends with the agent thanking the customer.", "issue_category": "Shipment Delay - Pickup Pending", "key_entities": {"awbs": [], "cities": ["मासू चौहानगी"], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.5, "sentiment_middle": 0.3, "sentiment_closing": 0.4, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "partially_resolved", "ai_score": 58.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 58, "call_closure": 6, "empathy_tone": 10, "call_efficiency": 4, "problem_solving": 8, "active_listening": 7, "opening_greeting": 8, "product_knowledge": 5, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": null, "compliance_flags": [], "sop_compliance": null, "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-03-26 18:42:48", "analyzed_at": "2026-03-26 18:42:57", "created_at": "2026-03-26 18:42:46", "updated_at": "2026-03-26 18:42:57"}, {"id": 14.0, "external_call_id": "CALL-100101", "agent_id": 2.0, "agent_name": "Divya Saxena", "agent_email": "divya.saxena@shiprocket.com", "company_id": 102.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/66a1dd77-ed92-4e21-8193-5e5cc9214eda.wav", "duration_seconds": 121.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer is frustrated about a delayed parcel that was supposed to be delivered but hasn't arrived yet. They express concern about their client's upcoming flight and the need for a refund if the parcel doesn't arrive on time. The agent tries to explain the situation and offers to make efforts to expedite the delivery, but the customer remains dissatisfied with the lack of a concrete solution and the possibility of needing to wait longer.", "issue_category": "Shipment Delay - In Transit", "key_entities": {"awbs": ["SRS C7 667 776 780 404 892 404"], "cities": ["Chandivali", "Dahisar"], "carriers": ["Aka Logistics Services"], "products": [], "order_ids": []}, "sentiment_opening": -0.5, "sentiment_middle": -0.7, "sentiment_closing": -0.6, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": ["मैं क्या कर सकती हूँ जबकि मेरा क्लाइंट का फ्लाइट है", "एक घंटे में शिपमेंट पॉसिबल नहीं हो पाता है"], "agent_tone": "empathetic", "resolution_status": "unresolved", "ai_score": 53.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 53, "call_closure": 5, "empathy_tone": 10, "call_efficiency": 3, "problem_solving": 5, "active_listening": 7, "opening_greeting": 5, "product_knowledge": 8, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": ["negative_mood_unresolved"], "compliance_flags": [], "sop_compliance": null, "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-03-26 18:43:42", "analyzed_at": "2026-03-26 18:43:52", "created_at": "2026-03-26 18:43:25", "updated_at": "2026-03-26 18:43:52"}, {"id": 15.0, "external_call_id": "CALL-100108", "agent_id": 2.0, "agent_name": "Meghna Roy", "agent_email": "meghna.roy@shiprocket.com", "company_id": 102.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/3c4e7fa5-6773-48ed-8893-835363bd3d61.wav", "duration_seconds": 121.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The call was forwarded to voice, indicating that the customer may have been placed on hold or transferred to another department. There is no further information provided about the customer's issue or the agent's response.", "issue_category": "Others", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.0, "sentiment_middle": 0.0, "sentiment_closing": 0.0, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "robotic", "resolution_status": "unresolved", "ai_score": 0.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 0, "call_closure": 0, "empathy_tone": 0, "call_efficiency": 0, "problem_solving": 0, "active_listening": 0, "opening_greeting": 0, "product_knowledge": 0, "compliance_adherence": 0, "hold_transfer_protocol": 0}, "alert_flags": ["low_qa_score"], "compliance_flags": [], "sop_compliance": null, "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-03-26 18:43:58", "analyzed_at": "2026-03-26 18:44:05", "created_at": "2026-03-26 18:43:57", "updated_at": "2026-03-26 18:44:05"}, {"id": 16.0, "external_call_id": "CALL-100115", "agent_id": 2.0, "agent_name": "Aarohi Singh", "agent_email": "aarohi.singh@shiprocket.com", "company_id": 102.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/31296690-cea4-4324-9d50-d88995768930.wav", "duration_seconds": 121.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer called regarding the transfer of their wallet amount to their bank account. The agent assured the customer that the request had been submitted and that the transfer would take one to two working days. The customer expressed frustration over previous complaints and the delay in receiving their funds. The agent provided the ticket ID and confirmed that the issue would be addressed promptly.", "issue_category": "Refund Status", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": -0.2, "sentiment_middle": -0.5, "sentiment_closing": 0.2, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": ["मैं दो बार कंप्लेंट दर्ज कर चुकी हूँ और मुझे पैसे नहीं आ रहे हैं"], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 72.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 72, "call_closure": 8, "empathy_tone": 12, "call_efficiency": 4, "problem_solving": 12, "active_listening": 8, "opening_greeting": 8, "product_knowledge": 10, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": ["negative_mood_unresolved"], "compliance_flags": [], "sop_compliance": null, "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-03-26 18:44:30", "analyzed_at": "2026-03-26 18:44:38", "created_at": "2026-03-26 18:44:24", "updated_at": "2026-03-26 18:44:38"}, {"id": 17.0, "external_call_id": "CALL-100122", "agent_id": 2.0, "agent_name": "Audipha", "agent_email": "audipha@shiprocket.com", "company_id": 102.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/071b8d6a-3edb-4bea-89a5-1c968a4d5086.wav", "duration_seconds": 121.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer reached out regarding a pickup issue with a courier service that has not been collected. The agent acknowledged the problem and assured the customer that they would sort it out. The agent then informed the customer that they would be transferring the call to the relevant team for further assistance.", "issue_category": "Shipment Delay - Pickup Pending", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.5, "sentiment_middle": 0.3, "sentiment_closing": 0.4, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 64.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 64, "call_closure": 6, "empathy_tone": 10, "call_efficiency": 4, "problem_solving": 6, "active_listening": 7, "opening_greeting": 8, "product_knowledge": 5, "compliance_adherence": 10, "hold_transfer_protocol": 8}, "alert_flags": null, "compliance_flags": [], "sop_compliance": null, "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-03-26 18:44:51", "analyzed_at": "2026-03-26 18:44:58", "created_at": "2026-03-26 18:44:48", "updated_at": "2026-03-26 18:44:58"}, {"id": 18.0, "external_call_id": "CALL-100129", "agent_id": 2.0, "agent_name": "Samag", "agent_email": "samag@shiprocket.com", "company_id": 102.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/9c76fb0b-f269-4cec-9ef4-0c51f6476293.wav", "duration_seconds": 121.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer called to inquire about an order they placed, which is visible on the Swiggy platform but lacks tracking information. The agent, Ashutam Amar Singh, attempted to assist by asking for the tracking ID and providing guidance on contacting the order source for further help. The call ended with the customer thanking the agent.", "issue_category": "Shipment Delay - In Transit", "key_entities": {"awbs": ["RTL7373545"], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.2, "sentiment_middle": 0.1, "sentiment_closing": 0.3, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "unresolved", "ai_score": 56.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 56, "call_closure": 8, "empathy_tone": 10, "call_efficiency": 3, "problem_solving": 5, "active_listening": 7, "opening_greeting": 8, "product_knowledge": 5, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": null, "compliance_flags": [], "sop_compliance": null, "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-03-26 18:45:27", "analyzed_at": "2026-03-26 18:45:34", "created_at": "2026-03-26 18:45:24", "updated_at": "2026-03-26 18:45:34"}, {"id": 19.0, "external_call_id": "CALL-100136", "agent_id": 2.0, "agent_name": "Sumanth", "agent_email": "sumanth@shiprocket.com", "company_id": 102.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/9d04bce3-cd35-4193-8967-902ea39bce82.wav", "duration_seconds": 121.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer, Kalpana Modi, called to inquire about the pickup status of her shipment, providing her AWB number and ticket ID. The agent attempted to assist but faced difficulties retrieving the shipment details and ultimately decided to transfer the call to another department. The customer expressed frustration over previous unsuccessful transfers and long wait times.", "issue_category": "Shipment Delay - Pickup Pending", "key_entities": {"awbs": ["20904217069543"], "cities": ["Bangalore"], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.5, "sentiment_middle": -0.3, "sentiment_closing": -0.5, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": ["I'm sorry for making you wait for a long time.", "nobody picked up."], "agent_tone": "empathetic", "resolution_status": "escalated", "ai_score": 58.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 58, "call_closure": 4, "empathy_tone": 10, "call_efficiency": 3, "problem_solving": 5, "active_listening": 7, "opening_greeting": 8, "product_knowledge": 5, "compliance_adherence": 10, "hold_transfer_protocol": 6}, "alert_flags": ["negative_mood_unresolved", "mood_deteriorated"], "compliance_flags": [], "sop_compliance": null, "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-03-26 18:45:57", "analyzed_at": "2026-03-26 18:46:04", "created_at": "2026-03-26 18:45:52", "updated_at": "2026-03-26 18:46:04"}, {"id": 20.0, "external_call_id": "CALL-100143", "agent_id": 2.0, "agent_name": "Ravi Tanaya", "agent_email": "ravi.tanaya@shiprocket.com", "company_id": 102.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/54c6e244-27ea-400d-8dd4-4fdcb8002f9a.wav", "duration_seconds": 121.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer, Mandeep Chhabra, contacted support regarding a missed pickup for his shipment scheduled with E-Cart Logistics. The agent acknowledged the issue and confirmed the details of the order while expressing empathy for the customer's frustration. The agent reassured Mandeep that they would prioritize the pickup request and escalate the issue to ensure resolution. The call ended with the agent providing the ticket number and thanking the customer for their patience.", "issue_category": "Shipment Delay - Pickup Pending", "key_entities": {"awbs": [], "cities": ["Amritsar", "New Delhi"], "carriers": ["E-Cart Logistics", "Express Delivery"], "products": [], "order_ids": []}, "sentiment_opening": 0.5, "sentiment_middle": 0.3, "sentiment_closing": 0.6, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "partially_resolved", "ai_score": 79.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 79, "call_closure": 9, "empathy_tone": 12, "call_efficiency": 4, "problem_solving": 10, "active_listening": 8, "opening_greeting": 8, "product_knowledge": 10, "compliance_adherence": 10, "hold_transfer_protocol": 8}, "alert_flags": null, "compliance_flags": [], "sop_compliance": null, "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-03-26 18:46:35", "analyzed_at": "2026-03-26 18:46:42", "created_at": "2026-03-26 18:46:17", "updated_at": "2026-03-26 18:46:42"}, {"id": 21.0, "external_call_id": "CALL-100150", "agent_id": 19.0, "agent_name": "Nitish", "agent_email": "nitish@shiprocket.com", "company_id": 102.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/0d168cec-69e5-42f7-a722-931790d26324.wav", "duration_seconds": 121.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer is experiencing issues with the PayU checkout service installed on their website, as their settlement payments have not been processed on the expected date. They express frustration over the poor customer support from PayU, which is causing delays in their ability to make further payments. The agent acknowledges the issue and promises to escalate it to the concerned department for resolution.", "issue_category": "Refund Status", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": ["PayU checkout service"], "order_ids": []}, "sentiment_opening": -0.5, "sentiment_middle": -0.8, "sentiment_closing": -0.3, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": ["बड़ा मतलब परेशान किया हुआ है", "उनका कस्टमर सपोर्ट भी अच्छा नहीं है"], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 63.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 63, "call_closure": 5, "empathy_tone": 10, "call_efficiency": 3, "problem_solving": 10, "active_listening": 8, "opening_greeting": 5, "product_knowledge": 12, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": ["negative_mood_unresolved"], "compliance_flags": [], "sop_compliance": null, "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-03-30 13:35:34", "analyzed_at": "2026-03-30 13:35:41", "created_at": "2026-03-30 13:35:25", "updated_at": "2026-03-30 13:35:41"}, {"id": 22.0, "external_call_id": "CALL-100157", "agent_id": 19.0, "agent_name": "Rohan", "agent_email": "rohan@shiprocket.com", "company_id": 109.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/a932b45f-6936-4daa-ae04-e62763c6d313.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": null, "issue_category": null, "key_entities": null, "sentiment_opening": 0.0, "sentiment_middle": 0.0, "sentiment_closing": 0.0, "overall_mood": null, "sentiment_trajectory": null, "sentiment_flags": null, "agent_tone": null, "resolution_status": null, "ai_score": 0.0, "human_score": null, "human_score_by_id": null, "score_details": null, "alert_flags": null, "compliance_flags": null, "sop_compliance": null, "audit_status": "pending", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": null, "analyzed_at": null, "created_at": "2026-03-31 22:13:20", "updated_at": "2026-03-31 22:13:20"}, {"id": 23.0, "external_call_id": "CALL-100164", "agent_id": 19.0, "agent_name": "Aadil", "agent_email": "aadil@shiprocket.com", "company_id": 109.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/a932b45f-6936-4daa-ae04-e62763c6d313.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer, Satish Kumar, contacted support regarding a damaged product received on the 17th and was seeking assistance with the return process. The agent informed him that they could not assist directly and advised him to contact the seller for help. The conversation ended with the agent apologizing for the inconvenience and thanking the customer for their patience.", "issue_category": "Damaged / Lost Shipment Claim", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.0, "sentiment_middle": -0.5, "sentiment_closing": 0.0, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": ["मैं समझ नहीं पा रही हूँ आप क्या कहना चाह रहे हैं", "हमारे इनसे हेल्प कर पाना बिलकुल भी पॉसिबल नहीं होगा"], "agent_tone": "defensive", "resolution_status": "unresolved", "ai_score": 32.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 32, "call_closure": 5, "empathy_tone": 5, "call_efficiency": 2, "problem_solving": 0, "active_listening": 5, "opening_greeting": 0, "product_knowledge": 5, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": ["negative_mood_unresolved", "low_qa_score"], "compliance_flags": [], "sop_compliance": [], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 11:01:01", "analyzed_at": "2026-04-01 11:01:10", "created_at": "2026-04-01 11:00:56", "updated_at": "2026-04-01 11:01:10"}, {"id": 24.0, "external_call_id": "CALL-100171", "agent_id": 68.0, "agent_name": "Ramesh", "agent_email": "ramesh@shiprocket.com", "company_id": 109.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/b4589416-8705-44d0-9868-129480749f00.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer called Shiprocket to express frustration over multiple failed delivery attempts and issues with OTP verification for their shipments. The agent acknowledged the customer's concerns and promised to escalate the issue to the relevant team for resolution. The call ended with the agent assuring the customer that they would follow up and provide updates regarding their account manager and delivery issues.", "issue_category": "NDR - Non-Delivery Report Update", "key_entities": {"awbs": [], "cities": ["Ahmedabad"], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": -0.5, "sentiment_middle": -0.3, "sentiment_closing": 0.2, "overall_mood": "frustrated", "sentiment_trajectory": "improving", "sentiment_flags": ["\"बहुत सारे अभी फ्रॉड अटेम्प्ट्स हो रहे हैं\"", "\"कस्टमर परेशान रहता\""], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 61.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 61, "call_closure": 8, "empathy_tone": 10, "call_efficiency": 3, "problem_solving": 10, "active_listening": 8, "opening_greeting": 5, "product_knowledge": 7, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": ["negative_mood_unresolved"], "compliance_flags": [], "sop_compliance": [], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 11:18:25", "analyzed_at": "2026-04-01 11:18:35", "created_at": "2026-04-01 11:17:52", "updated_at": "2026-04-01 11:18:35"}, {"id": 25.0, "external_call_id": "CALL-100178", "agent_id": 68.0, "agent_name": "Priyansh Sharma", "agent_email": "priyansh.sharma@shiprocket.com", "company_id": 109.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/b4589416-8705-44d0-9868-129480749f00.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer called to express frustration over multiple delivery issues and OTP problems with their shipments. The agent, Simran, acknowledged the customer's concerns and promised to escalate the issues to the relevant team for resolution. The call involved discussions about the customer's account manager and the need for better communication regarding deliveries.", "issue_category": "NDR - Non-Delivery Report Update", "key_entities": {"awbs": [], "cities": ["Ahmedabad"], "carriers": ["Blue Dart"], "products": ["Blue Dark Foundation"], "order_ids": []}, "sentiment_opening": 0.2, "sentiment_middle": -0.4, "sentiment_closing": 0.1, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": ["\"बहुत सारे अभी फ्रॉड अटेम्प्ट्स हो रहे हैं\"", "\"मुझे समझ में नहीं आ रहा है कि मतलब ये क्या चल रहा है\""], "agent_tone": "empathetic", "resolution_status": "partially_resolved", "ai_score": 68.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 68, "call_closure": 8, "empathy_tone": 10, "call_efficiency": 3, "problem_solving": 10, "active_listening": 7, "opening_greeting": 8, "product_knowledge": 12, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": ["negative_mood_unresolved"], "compliance_flags": [], "sop_compliance": [{"title": "Product Highlight", "sop_id": 2, "status": "not_applicable", "evidence": "The call focused on delivery issues and customer concerns rather than product highlights."}, {"title": "Sr Promise", "sop_id": 5, "status": "not_applicable", "evidence": "The conversation did not address delivery promises or estimated delivery dates."}, {"title": "Shiprocket Exchange", "sop_id": 7, "status": "violated", "evidence": "The agent did not verify buyer details or provide adequate information on the exchange process."}, {"title": "Tds Claim", "sop_id": 9, "status": "not_applicable", "evidence": "The call did not involve any TDS claim process."}, {"title": "Refund Sop", "sop_id": 10, "status": "not_applicable", "evidence": "The discussion was centered around delivery issues, not refunds."}, {"title": "Product Update Milestone Program", "sop_id": 13, "status": "not_applicable", "evidence": "The call did not mention the milestone program."}, {"title": "Pod", "sop_id": 14, "status": "not_applicable", "evidence": "The conversation did not involve proof of delivery."}, {"title": "Shiprocket Audience Pro", "sop_id": 21, "status": "not_applicable", "evidence": "The call did not discuss audience targeting or related services."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 11:28:29", "analyzed_at": "2026-04-01 11:28:48", "created_at": "2026-04-01 11:28:03", "updated_at": "2026-04-01 11:28:48"}, {"id": 26.0, "external_call_id": "CALL-100185", "agent_id": 69.0, "agent_name": "Subhham", "agent_email": "subhham@shiprocket.com", "company_id": 109.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/018cf450-deff-4c3e-9ccd-c4e4cbbc2eb4.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer is experiencing issues with a parcel that has attempted delivery twice and is showing a third attempt without any communication via call or SMS. The agent acknowledges the issue and informs the customer that they will transfer the call to the relevant department for further assistance.", "issue_category": "Shipment Delay - In Transit", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.0, "sentiment_middle": 0.0, "sentiment_closing": 0.0, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 48.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 48, "call_closure": 5, "empathy_tone": 10, "call_efficiency": 3, "problem_solving": 5, "active_listening": 5, "opening_greeting": 0, "product_knowledge": 5, "compliance_adherence": 10, "hold_transfer_protocol": 5}, "alert_flags": ["low_qa_score"], "compliance_flags": [], "sop_compliance": [{"title": "Product Highlight", "sop_id": 2, "status": "not_applicable", "evidence": "The transcript does not mention any product highlights."}, {"title": "Shiprocket Exchange", "sop_id": 7, "status": "violated", "evidence": "The agent did not verify buyer details or provide adequate information regarding the shipment attempts."}, {"title": "Tds Claim", "sop_id": 9, "status": "not_applicable", "evidence": "The transcript does not involve a TDS claim."}, {"title": "Refund Sop", "sop_id": 10, "status": "not_applicable", "evidence": "The transcript does not mention any refund processes."}, {"title": "Shiprocket Audience Pro", "sop_id": 21, "status": "not_applicable", "evidence": "The transcript does not discuss audience targeting or related services."}, {"title": "Shipment Sr Secure", "sop_id": 22, "status": "not_applicable", "evidence": "The transcript does not mention secure shipment options."}, {"title": "Ndr Sop Post Nugget", "sop_id": 26, "status": "violated", "evidence": "The agent did not confirm the NDR reason or provide proper follow-up for the delivery attempts."}, {"title": "Ondc", "sop_id": 32, "status": "not_applicable", "evidence": "The transcript does not involve any ONDC related queries."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 11:31:11", "analyzed_at": "2026-04-01 11:31:32", "created_at": "2026-04-01 11:31:08", "updated_at": "2026-04-01 11:31:32"}, {"id": 27.0, "external_call_id": "CALL-100192", "agent_id": 70.0, "agent_name": "Nisham", "agent_email": "nisham@shiprocket.com", "company_id": 109.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/00dc7192-f446-4f1e-87c6-8dd9f7bd6257.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer, Ms. Chauhan, is inquiring about a pickup that was scheduled but has not yet occurred. The agent, Mr. Bharta, acknowledges the issue and checks the system for updates, assuring the customer that they will receive proper updates regarding their order. However, there seems to be a communication gap as the customer has not received any calls or messages about the pickup status.", "issue_category": "Shipment Delay - Pickup Pending", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.5, "sentiment_middle": 0.2, "sentiment_closing": 0.3, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "unresolved", "ai_score": 59.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 59, "call_closure": 5, "empathy_tone": 10, "call_efficiency": 3, "problem_solving": 6, "active_listening": 7, "opening_greeting": 8, "product_knowledge": 5, "compliance_adherence": 10, "hold_transfer_protocol": 5}, "alert_flags": null, "compliance_flags": [], "sop_compliance": [{"title": "Instant Pickup", "sop_id": 11, "status": "followed", "evidence": "The agent addressed the pickup issue and provided updates on the status."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 11:35:16", "analyzed_at": "2026-04-01 11:35:33", "created_at": "2026-04-01 11:35:12", "updated_at": "2026-04-01 11:35:33"}, {"id": 28.0, "external_call_id": "CALL-100199", "agent_id": 70.0, "agent_name": "Prince", "agent_email": "prince@shiprocket.com", "company_id": 109.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/c7b0fd5b-3ec6-474c-8b19-bd8884c45880.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer called to inquire about a wallet amount transfer to their bank account that has not been processed. They mentioned a previous transfer that was refunded and expressed frustration over receiving automated replies when creating tickets. The agent acknowledged the issue, escalated it to the technical team, and assured the customer that the transfer would occur automatically while advising them to reply with a screenshot of the error. The call ended with the agent thanking the customer.", "issue_category": "Refund Status", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": -0.5, "sentiment_middle": 0.0, "sentiment_closing": 0.5, "overall_mood": "neutral", "sentiment_trajectory": "improving", "sentiment_flags": ["I'm getting an automated reply from you guys", "It's been more than a week"], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 72.0, "human_score": 92.0, "human_score_by_id": 1.0, "score_details": {"total": 72, "call_closure": 8, "empathy_tone": 12, "call_efficiency": 4, "problem_solving": 12, "active_listening": 8, "opening_greeting": 8, "product_knowledge": 10, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": null, "compliance_flags": [], "sop_compliance": [{"title": "Refund Sop", "sop_id": 10, "status": "followed", "evidence": "The agent discussed the refund process for wallet transfers and provided information about timelines."}], "audit_status": "human_reviewed", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 11:42:12", "analyzed_at": "2026-04-01 11:42:31", "created_at": "2026-04-01 11:42:02", "updated_at": "2026-04-01 19:07:16"}, {"id": 29.0, "external_call_id": "CALL-100206", "agent_id": 71.0, "agent_name": "Chirag", "agent_email": "chirag@shiprocket.com", "company_id": 110.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/e28b2659-55f4-41b1-8947-d0d7aed9adb0.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer called to request a change to the pin code associated with their recent order from Kundan Store. The agent explained that changes to the pin code can only be made by the seller and that the customer would need to contact them directly. The agent clarified that they handle complaints from the seller's side and cannot assist with buyer requests. The call ended with the agent thanking the customer for calling.", "issue_category": "Others", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.5, "sentiment_middle": 0.0, "sentiment_closing": 0.5, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "unresolved", "ai_score": 62.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 62, "call_closure": 8, "empathy_tone": 10, "call_efficiency": 4, "problem_solving": 5, "active_listening": 7, "opening_greeting": 8, "product_knowledge": 10, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": null, "compliance_flags": [], "sop_compliance": [], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 11:43:50", "analyzed_at": "2026-04-01 11:44:07", "created_at": "2026-04-01 11:43:45", "updated_at": "2026-04-01 11:44:07"}, {"id": 30.0, "external_call_id": "CALL-100213", "agent_id": 71.0, "agent_name": "Ajay", "agent_email": "ajay@shiprocket.com", "company_id": 110.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/e28b2659-55f4-41b1-8947-d0d7aed9adb0.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer called to request a change to the pin code associated with their order from Kundan Store. The agent explained that changes to the pin code can only be made by the seller and that the customer needs to contact the seller directly. The agent clarified their role as seller support and concluded the call after confirming the customer's understanding.", "issue_category": "Account Activation / KYC", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.5, "sentiment_middle": 0.0, "sentiment_closing": 0.5, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "unresolved", "ai_score": 62.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 62, "call_closure": 8, "empathy_tone": 10, "call_efficiency": 4, "problem_solving": 5, "active_listening": 7, "opening_greeting": 8, "product_knowledge": 10, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": null, "compliance_flags": [], "sop_compliance": [], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 11:46:54", "analyzed_at": "2026-04-01 11:47:10", "created_at": "2026-04-01 11:46:51", "updated_at": "2026-04-01 11:47:10"}, {"id": 31.0, "external_call_id": "CALL-100220", "agent_id": 71.0, "agent_name": "Hitesh", "agent_email": "hitesh@shiprocket.com", "company_id": 110.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/d914df99-21fa-4d12-8326-69034b2e3dee.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer is frustrated about a code transfer issue, expressing that this is the third time they are repeating their concern. The agent attempts to transfer the call but is unable to provide clarity on why the call is being disconnected. The agent seems confused about the situation and is trying to assist the customer.", "issue_category": "Portal Technical Issue", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": -0.5, "sentiment_middle": -0.7, "sentiment_closing": -0.6, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": ["मैं आपसे यह थर्ड टाइम रिपीट कर रही हूं", "मुझे नहीं पता आपका कॉल गेट कौन कर रहा है"], "agent_tone": "robotic", "resolution_status": "unresolved", "ai_score": 23.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 23, "call_closure": 0, "empathy_tone": 5, "call_efficiency": 1, "problem_solving": 2, "active_listening": 3, "opening_greeting": 0, "product_knowledge": 2, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": ["negative_mood_unresolved", "low_qa_score"], "compliance_flags": [], "sop_compliance": [], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 11:49:39", "analyzed_at": "2026-04-01 11:49:54", "created_at": "2026-04-01 11:49:36", "updated_at": "2026-04-01 11:49:54"}, {"id": 32.0, "external_call_id": "CALL-100227", "agent_id": 71.0, "agent_name": "Nitesh", "agent_email": "nitesh@shiprocket.com", "company_id": 110.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/d914df99-21fa-4d12-8326-69034b2e3dee.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer is frustrated about a code transfer issue, expressing that this is the third time they are repeating their concern. The agent responds that they are transferring the code and is unsure why it is being cut. The conversation indicates a lack of clarity and understanding between the customer and the agent.", "issue_category": "Account Activation / KYC", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": -0.5, "sentiment_middle": -0.7, "sentiment_closing": -0.6, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": ["मैं आपसे ये थर्ड टाइम रिपीट कर रही हूँ", "मुझे नहीं पता आपका कोड कट कौन कर रहा है"], "agent_tone": "defensive", "resolution_status": "unresolved", "ai_score": 32.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 32, "call_closure": 0, "empathy_tone": 5, "call_efficiency": 2, "problem_solving": 5, "active_listening": 5, "opening_greeting": 0, "product_knowledge": 5, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": ["negative_mood_unresolved", "low_qa_score"], "compliance_flags": [], "sop_compliance": [{"title": "Wallet Balance Transfer Request", "sop_id": 55, "status": "followed", "evidence": "The agent was discussing a wallet transfer, indicating they were addressing the request."}, {"title": "Cod Remittance Out Of Tat", "sop_id": 79, "status": "violated", "evidence": "The agent failed to provide information on the COD remittance process despite the customer inquiring about it."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 11:56:09", "analyzed_at": "2026-04-01 11:56:25", "created_at": "2026-04-01 11:56:07", "updated_at": "2026-04-01 11:56:25"}, {"id": 33.0, "external_call_id": "CALL-100234", "agent_id": 71.0, "agent_name": "Anushka", "agent_email": "anushka@shiprocket.com", "company_id": 110.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/78412c6f-e6cc-41ee-b3f8-bf031c5ec695.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer is inquiring about a ticket they purchased and is frustrated due to a fine imposed on them. They provide their ticket ID and ask for assistance regarding the shipment details. The agent explains that the shipment status is auto-accepted and that the customer needs to provide images for a dispute they failed to raise in time. The conversation ends with the agent advising the customer to create sample images if they do not have the required ones.", "issue_category": "Refund Status", "key_entities": {"awbs": ["वन फोर डबल वन वन फोर डबल वन और टू थ्री फाइव सेवन"], "cities": [], "carriers": ["कॉर्पोरेट कम्पनी"], "products": ["डांस वाला टिकट"], "order_ids": ["दो एक दिन के लिए दूँगावन"]}, "sentiment_opening": -0.5, "sentiment_middle": -0.3, "sentiment_closing": -0.2, "overall_mood": "frustrated", "sentiment_trajectory": "stable", "sentiment_flags": ["मुझे फाइन मार दिया", "आपने टाइमली जो है डिस्प्यूट रेज नहीं किया"], "agent_tone": "empathetic", "resolution_status": "unresolved", "ai_score": 63.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 63, "call_closure": 5, "empathy_tone": 10, "call_efficiency": 3, "problem_solving": 10, "active_listening": 8, "opening_greeting": 5, "product_knowledge": 12, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": ["negative_mood_unresolved"], "compliance_flags": [], "sop_compliance": [{"title": "Shiprocket Exchange", "sop_id": 7, "status": "violated", "evidence": "The agent failed to ensure correct product description and value were discussed, which is crucial for future claims."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 12:11:10", "analyzed_at": "2026-04-01 12:11:36", "created_at": "2026-04-01 12:11:03", "updated_at": "2026-04-01 12:11:36"}, {"id": 34.0, "external_call_id": "CALL-100241", "agent_id": 79.0, "agent_name": "Akansha", "agent_email": "akansha@shiprocket.com", "company_id": 110.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/f79cde10-40a3-4e75-b1b7-0f3ba2fba3bc.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer is frustrated about the repeated delays in the delivery of their order, which was supposed to be delivered on multiple dates but remains in transit. The agent attempts to explain the situation but fails to provide satisfactory answers, leading to further frustration from the customer. The call ends with the customer expressing their dissatisfaction and the agent apologizing for the inconvenience.", "issue_category": "Shipment Delay - In Transit", "key_entities": {"awbs": ["70118211601"], "cities": ["Kozhikode", "Surat"], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": -0.5, "sentiment_middle": -0.8, "sentiment_closing": -0.6, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": ["It is just delaying and delaying.", "I'm so sorry for that thing, ma'am."], "agent_tone": "defensive", "resolution_status": "unresolved", "ai_score": 43.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 43, "call_closure": 5, "empathy_tone": 5, "call_efficiency": 3, "problem_solving": 5, "active_listening": 5, "opening_greeting": 5, "product_knowledge": 5, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": ["negative_mood_unresolved", "low_qa_score"], "compliance_flags": [], "sop_compliance": [{"title": "Shipment Status Untractable", "sop_id": 48, "status": "followed", "evidence": "The agent checked the shipment status and communicated the expected delivery dates."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 12:57:25", "analyzed_at": "2026-04-01 12:57:41", "created_at": "2026-04-01 12:57:21", "updated_at": "2026-04-01 12:57:41"}, {"id": 35.0, "external_call_id": "CALL-100248", "agent_id": 79.0, "agent_name": "Amrit", "agent_email": "amrit@shiprocket.com", "company_id": 110.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/e2d7d7d8-4d63-4b6b-a632-c5ff56ca865d.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer called to inquire about the status of their shipment with AWB number 777969053053 and was informed that the pickup was already scheduled but had not occurred. The agent apologized for the delay and requested the customer to share the signed manifest copy for further assistance. The agent assured the customer that their shipment status would be updated within 1-2 working days and provided additional information regarding the pickup process.", "issue_category": "Shipment Delay - Pickup Pending", "key_entities": {"awbs": ["777969053053"], "cities": ["Aurangabad"], "carriers": ["Blue Dart"], "products": [], "order_ids": []}, "sentiment_opening": 0.5, "sentiment_middle": 0.2, "sentiment_closing": 0.4, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "partially_resolved", "ai_score": 70.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 70, "call_closure": 8, "empathy_tone": 10, "call_efficiency": 4, "problem_solving": 10, "active_listening": 8, "opening_greeting": 8, "product_knowledge": 12, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": null, "compliance_flags": [], "sop_compliance": [], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 12:59:30", "analyzed_at": "2026-04-01 12:59:47", "created_at": "2026-04-01 12:59:05", "updated_at": "2026-04-01 12:59:47"}, {"id": 36.0, "external_call_id": "CALL-100255", "agent_id": 79.0, "agent_name": "Amitakesh", "agent_email": "amitakesh@shiprocket.com", "company_id": 110.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/d0a52f74-dac5-4fb0-be32-e6f33a3afa6b.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer is inquiring about an AWB number related to a shipment that is marked as out of delivery area. The agent explains that the delivery cannot be completed due to the customer's location being outside the serviceable area. The customer expresses frustration about the situation and the agent apologizes for the inconvenience, suggesting that the customer may need to contact Amazon for further assistance. The call ends with the agent reiterating the issue and offering to provide updates.", "issue_category": "Shipment Delay - Delivery Failed / Incorrect Address", "key_entities": {"awbs": ["367367238931131331"], "cities": ["Jaipur"], "carriers": ["Amazon"], "products": [], "order_ids": []}, "sentiment_opening": -0.5, "sentiment_middle": -0.3, "sentiment_closing": -0.4, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": ["मैं माफ़ी चाह रहा हूँ", "ये एक बहुत प्रॉब्लेमैटिक चीज़ है"], "agent_tone": "empathetic", "resolution_status": "unresolved", "ai_score": 59.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 59, "call_closure": 5, "empathy_tone": 10, "call_efficiency": 3, "problem_solving": 8, "active_listening": 8, "opening_greeting": 5, "product_knowledge": 10, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": ["negative_mood_unresolved"], "compliance_flags": [], "sop_compliance": [{"title": "Shiprocket Exchange", "sop_id": 7, "status": "violated", "evidence": "The agent failed to verify buyer details and did not provide adequate information regarding the out-of-delivery area."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 13:04:40", "analyzed_at": "2026-04-01 13:05:00", "created_at": "2026-04-01 13:04:34", "updated_at": "2026-04-01 13:05:00"}, {"id": 37.0, "external_call_id": "CALL-100262", "agent_id": 99.0, "agent_name": "Aman", "agent_email": "aman@shiprocket.com", "company_id": 190.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/0c361d29-02fb-43d4-9efe-d2c87e7b82f3.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer, Robert, called to inquire about a wallet transfer he initiated on February 8th, as he has not received any updates or the amount in his bank account. The agent acknowledged the issue and informed Robert that they would transfer the call to the relevant team for further assistance.", "issue_category": "Refund Status", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.5, "sentiment_middle": 0.2, "sentiment_closing": 0.3, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 63.0, "human_score": 67.0, "human_score_by_id": 1.0, "score_details": {"total": 63, "call_closure": 6, "empathy_tone": 10, "call_efficiency": 4, "problem_solving": 5, "active_listening": 7, "opening_greeting": 8, "product_knowledge": 5, "compliance_adherence": 10, "hold_transfer_protocol": 8}, "alert_flags": null, "compliance_flags": [], "sop_compliance": [{"title": "Wallet Balance Transfer Request", "sop_id": 55, "status": "followed", "evidence": "The agent addressed the wallet transfer issue and mentioned transferring the call to the relevant team for assistance."}], "audit_status": "human_reviewed", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 14:59:21", "analyzed_at": "2026-04-01 14:59:34", "created_at": "2026-04-01 14:59:17", "updated_at": "2026-04-02 10:53:01"}, {"id": 38.0, "external_call_id": "CALL-100269", "agent_id": 101.0, "agent_name": "Priyansh Sharma", "agent_email": "priyansh.sharma@shiprocket.com", "company_id": 190.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/9193135f-5dea-4620-83b4-4f601a317129.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer support agent welcomed the customer and provided the AWB number for their shipment. The agent informed the customer that the delivery status is pending and mentioned the estimated delivery date. The customer expressed urgency for the delivery, and the agent assured them that they would check on it. The call ended with the agent thanking the customer and wishing them a great day.", "issue_category": "Shipment Delay - In Transit", "key_entities": {"awbs": ["आई ऐट फोर थ्री सिक्स आई ऐट फोर थ्री सिक्स जीरो ऐट थ्री फाइव"], "cities": ["गाजियाबाद", "पंजाब"], "carriers": ["डीटीडीसी"], "products": [], "order_ids": []}, "sentiment_opening": 0.8, "sentiment_middle": 0.6, "sentiment_closing": 0.9, "overall_mood": "positive", "sentiment_trajectory": "improving", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "unresolved", "ai_score": 75.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 75, "call_closure": 10, "empathy_tone": 12, "call_efficiency": 5, "problem_solving": 10, "active_listening": 8, "opening_greeting": 10, "product_knowledge": 10, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": null, "compliance_flags": [], "sop_compliance": [{"title": "Shipment Status Untractable", "sop_id": 48, "status": "followed", "evidence": "The agent provided the customer with the status of their shipment."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 15:08:19", "analyzed_at": "2026-04-01 15:08:39", "created_at": "2026-04-01 15:08:16", "updated_at": "2026-04-01 15:08:39"}, {"id": 39.0, "external_call_id": "CALL-100276", "agent_id": 101.0, "agent_name": "Priya", "agent_email": "priya@shiprocket.com", "company_id": 190.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/46551ce2-05cc-4975-8a67-df720ac0e764.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer, Shubhalaksha, contacted support for assistance with a courier service. The agent guided him through the process of logging into the shipping panel, completing KYC, and creating a shipment. The call ended with the agent confirming if any further help was needed and thanking the customer for the call.", "issue_category": "Account Activation / KYC", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.5, "sentiment_middle": 0.6, "sentiment_closing": 0.5, "overall_mood": "positive", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "resolved", "ai_score": 75.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 75, "call_closure": 8, "empathy_tone": 12, "call_efficiency": 5, "problem_solving": 12, "active_listening": 8, "opening_greeting": 8, "product_knowledge": 12, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": null, "compliance_flags": [], "sop_compliance": [{"title": "Wallet Balance Transfer Request", "sop_id": 55, "status": "followed", "evidence": "The agent discussed KYC and bank details for creating a shipment."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-01 19:09:23", "analyzed_at": "2026-04-01 19:09:42", "created_at": "2026-04-01 19:09:21", "updated_at": "2026-04-01 19:09:42"}, {"id": 40.0, "external_call_id": "CALL-100283", "agent_id": 101.0, "agent_name": "Abhishek", "agent_email": "abhishek@shiprocket.com", "company_id": 190.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/46551ce2-05cc-4975-8a67-df720ac0e764.wav", "duration_seconds": 120.0, "call_direction": "inbound", "language": "hi", "auto_summary": "The customer, शुभ्रalaksha, reached out for assistance regarding a shipment. The agent guided the customer through the process of logging into the shipping panel and completing the necessary KYC verification. The customer acknowledged the instructions and confirmed understanding, expressing gratitude at the end of the call.", "issue_category": "Account Activation / KYC", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.5, "sentiment_middle": 0.6, "sentiment_closing": 0.7, "overall_mood": "positive", "sentiment_trajectory": "improving", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "resolved", "ai_score": 72.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 72, "call_closure": 8, "empathy_tone": 12, "call_efficiency": 4, "problem_solving": 12, "active_listening": 8, "opening_greeting": 8, "product_knowledge": 10, "compliance_adherence": 10, "hold_transfer_protocol": 0}, "alert_flags": null, "compliance_flags": [], "sop_compliance": [{"title": "Wallet Balance Transfer Request", "sop_id": 55, "status": "followed", "evidence": "The agent guided the caller on how to complete KYC and create a shipment, which is relevant to wallet balance transfer."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-25 15:30:00", "call_ended_at": "2026-03-25 15:32:00", "transcribed_at": "2026-04-21 18:33:42", "analyzed_at": "2026-04-21 18:33:58", "created_at": "2026-04-21 18:33:39", "updated_at": "2026-04-21 18:33:58"}, {"id": 41.0, "external_call_id": "CALL-100220", "agent_id": 201.0, "agent_name": "Arjun Kapoor", "agent_email": "arjun.kapoor@shiprocket.com", "company_id": 190.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/78412c6f-e6cc-41ee-b3f8-bf031c5ec695.wav", "duration_seconds": 241.0, "call_direction": "inbound", "language": "hi", "auto_summary": "Customer called inquiring about AWB 14726589301 that has been stuck at Delhi hub for 4 days. The original promised delivery date was 3 days ago and customer's end receiver is upset. Agent acknowledged the delay, escalated to courier support, and promised a callback within 24 hours with hub status update.", "issue_category": "Shipment Delay - In Transit", "key_entities": {"awbs": ["14726589301"], "cities": ["Delhi"], "carriers": ["Delhivery"], "products": [], "order_ids": []}, "sentiment_opening": 0.1, "sentiment_middle": -0.4, "sentiment_closing": -0.2, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 63.0, "human_score": 53.0, "human_score_by_id": 3.0, "score_details": {"total": 63, "call_closure": 5, "empathy_tone": 11, "call_efficiency": 5, "problem_solving": 11, "active_listening": 8, "accurate_information": 8, "compliance_adherence": 8, "professional_closing": 4, "greeting_quality": 3}, "alert_flags": ["negative_mood_unresolved"], "compliance_flags": [], "sop_compliance": [{"title": "Clear Next-Step Communication", "status": "followed", "evidence": "Agent clearly outlined the next steps and what the customer can expect."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}, {"title": "Ownership & Commitment", "status": "followed", "evidence": "Agent took ownership of the issue and committed to a specific follow-up timeline."}, {"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}], "audit_status": "human_reviewed", "qa_remarks": "AI underestimated empathy shown. Agent was genuinely helpful.", "call_started_at": "2026-02-20 10:01:00", "call_ended_at": "2026-02-20 10:05:39", "transcribed_at": "2026-02-20 10:06:00", "analyzed_at": "2026-02-20 10:07:00", "created_at": "2026-02-20 10:01:00", "updated_at": "2026-02-20 18:01:00"}, {"id": 42.0, "external_call_id": "CALL-100227", "agent_id": 202.0, "agent_name": "Kavya Reddy", "agent_email": "kavya.reddy@shiprocket.com", "company_id": 190.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/9193135f-5dea-4620-83b4-4f601a317129.wav", "duration_seconds": 195.0, "call_direction": "inbound", "language": "en", "auto_summary": "Customer inquired about pending refund of Rs. 1,247 for a returned shipment from last week. Agent verified the refund request is in processing queue, shared the expected credit date (5-7 business days), and shared the reference number for follow-up.", "issue_category": "Refund Status", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": ["ORD-88291045"]}, "sentiment_opening": -0.3, "sentiment_middle": -0.1, "sentiment_closing": 0.2, "overall_mood": "frustrated", "sentiment_trajectory": "improving", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "partially_resolved", "ai_score": 68.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 68, "call_closure": 5, "empathy_tone": 12, "call_efficiency": 5, "problem_solving": 12, "active_listening": 8, "accurate_information": 8, "compliance_adherence": 8, "professional_closing": 5, "greeting_quality": 3}, "alert_flags": [], "compliance_flags": [], "sop_compliance": [{"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}, {"title": "Accurate Information Sharing", "status": "followed", "evidence": "Agent provided accurate status as per the courier tracking system."}, {"title": "Empathy Acknowledgement", "status": "followed", "evidence": "Agent acknowledged the customer's inconvenience and apologized sincerely."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-02-21 17:38:00", "call_ended_at": "2026-02-21 17:39:36", "transcribed_at": "2026-02-21 17:43:00", "analyzed_at": "2026-02-21 17:44:00", "created_at": "2026-02-21 17:38:00", "updated_at": "2026-02-22 16:38:00"}, {"id": 43.0, "external_call_id": "CALL-100234", "agent_id": 203.0, "agent_name": "Manish Agarwal", "agent_email": "manish.agarwal@shiprocket.com", "company_id": 100.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/b4589416-8705-44d0-9868-129480749f00.wav", "duration_seconds": 261.0, "call_direction": "inbound", "language": "hi", "auto_summary": "Seller raised concern about pickup pending for 3 consecutive days despite scheduling. Agent was defensive about the courier's delay, did not offer a concrete solution, and the customer disconnected unsatisfied. Rescheduling promised but without a confirmed date.", "issue_category": "Shipment Delay - Pickup Pending", "key_entities": {"awbs": ["19203847561"], "cities": ["Mumbai"], "carriers": ["Bluedart"], "products": [], "order_ids": []}, "sentiment_opening": -0.2, "sentiment_middle": -0.5, "sentiment_closing": -0.6, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": [], "agent_tone": "defensive", "resolution_status": "unresolved", "ai_score": 32.0, "human_score": 52.0, "human_score_by_id": 2.0, "score_details": {"total": 32, "call_closure": 3, "empathy_tone": 6, "call_efficiency": 3, "problem_solving": 6, "active_listening": 4, "accurate_information": 4, "compliance_adherence": 4, "professional_closing": 2, "greeting_quality": 2}, "alert_flags": ["negative_mood_unresolved", "customer_disconnected"], "compliance_flags": ["inadequate_empathy"], "sop_compliance": [{"title": "Ownership & Commitment", "status": "followed", "evidence": "Agent took ownership of the issue and committed to a specific follow-up timeline."}, {"title": "Accurate Information Sharing", "status": "followed", "evidence": "Agent provided accurate status as per the courier tracking system."}, {"title": "Empathy Acknowledgement", "status": "followed", "evidence": "Agent acknowledged the customer's inconvenience and apologized sincerely."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Verification of Identity / Order Details", "status": "followed", "evidence": "Agent verified the AWB number and registered phone number before discussing order specifics."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}], "audit_status": "human_reviewed", "qa_remarks": "AI underestimated empathy shown. Agent was genuinely helpful.", "call_started_at": "2026-02-23 15:21:00", "call_ended_at": "2026-02-23 15:23:41", "transcribed_at": "2026-02-23 15:26:00", "analyzed_at": "2026-02-23 15:27:00", "created_at": "2026-02-23 15:21:00", "updated_at": "2026-02-23 19:21:00"}, {"id": 44.0, "external_call_id": "CALL-100241", "agent_id": 204.0, "agent_name": "Pooja Iyer", "agent_email": "pooja.iyer@shiprocket.com", "company_id": 110.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/c7b0fd5b-3ec6-474c-8b19-bd8884c45880.wav", "duration_seconds": 158.0, "call_direction": "inbound", "language": "en", "auto_summary": "New seller called to check KYC approval status. Agent verified the documents were received and approved that morning, walked the seller through the panel login, and confirmed the account is fully active. Seller thanked the agent.", "issue_category": "Account Activation / KYC", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.1, "sentiment_middle": 0.3, "sentiment_closing": 0.6, "overall_mood": "neutral", "sentiment_trajectory": "improving", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "resolved", "ai_score": 79.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 79, "call_closure": 6, "empathy_tone": 14, "call_efficiency": 6, "problem_solving": 14, "active_listening": 9, "accurate_information": 9, "compliance_adherence": 9, "professional_closing": 6, "greeting_quality": 4}, "alert_flags": [], "compliance_flags": [], "sop_compliance": [{"title": "Verification of Identity / Order Details", "status": "followed", "evidence": "Agent verified the AWB number and registered phone number before discussing order specifics."}, {"title": "Ownership & Commitment", "status": "followed", "evidence": "Agent took ownership of the issue and committed to a specific follow-up timeline."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Clear Next-Step Communication", "status": "followed", "evidence": "Agent clearly outlined the next steps and what the customer can expect."}, {"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}, {"title": "Accurate Information Sharing", "status": "followed", "evidence": "Agent provided accurate status as per the courier tracking system."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-02-24 15:05:00", "call_ended_at": "2026-02-24 15:08:51", "transcribed_at": "2026-02-24 15:10:00", "analyzed_at": "2026-02-24 15:11:00", "created_at": "2026-02-24 15:05:00", "updated_at": "2026-02-24 23:05:00"}, {"id": 45.0, "external_call_id": "CALL-100248", "agent_id": 205.0, "agent_name": "Vikram Mehra", "agent_email": "vikram.mehra@shiprocket.com", "company_id": 102.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/d0a52f74-dac5-4fb0-be32-e6f33a3afa6b.wav", "duration_seconds": 259.0, "call_direction": "inbound", "language": "en", "auto_summary": "Seller reported 3 NDR cases where customer marked 'address not found' but addresses were correct. Agent noted the cases, escalated to the delivery team, and promised callback once the courier hub confirms reattempt schedule.", "issue_category": "NDR - Non-Delivery Report Update", "key_entities": {"awbs": ["14729834567", "14729834591", "14729834612"], "cities": ["Bengaluru"], "carriers": ["Delhivery"], "products": [], "order_ids": []}, "sentiment_opening": -0.2, "sentiment_middle": -0.2, "sentiment_closing": -0.1, "overall_mood": "frustrated", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 65.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 65, "call_closure": 5, "empathy_tone": 12, "call_efficiency": 5, "problem_solving": 12, "active_listening": 8, "accurate_information": 8, "compliance_adherence": 8, "professional_closing": 5, "greeting_quality": 3}, "alert_flags": [], "compliance_flags": [], "sop_compliance": [{"title": "Verification of Identity / Order Details", "status": "followed", "evidence": "Agent verified the AWB number and registered phone number before discussing order specifics."}, {"title": "Ownership & Commitment", "status": "followed", "evidence": "Agent took ownership of the issue and committed to a specific follow-up timeline."}, {"title": "Empathy Acknowledgement", "status": "followed", "evidence": "Agent acknowledged the customer's inconvenience and apologized sincerely."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}, {"title": "Clear Next-Step Communication", "status": "followed", "evidence": "Agent clearly outlined the next steps and what the customer can expect."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-02-26 10:24:00", "call_ended_at": "2026-02-26 10:26:41", "transcribed_at": "2026-02-26 10:29:00", "analyzed_at": "2026-02-26 10:30:00", "created_at": "2026-02-26 10:24:00", "updated_at": "2026-02-27 10:24:00"}, {"id": 46.0, "external_call_id": "CALL-100255", "agent_id": 206.0, "agent_name": "Sneha Bhatt", "agent_email": "sneha.bhatt@shiprocket.com", "company_id": 190.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/d914df99-21fa-4d12-8326-69034b2e3dee.wav", "duration_seconds": 309.0, "call_direction": "inbound", "language": "hi", "auto_summary": "Customer's shipment worth Rs. 4,500 arrived damaged. Customer demanded immediate compensation. Agent cited claim process timelines defensively without acknowledging the damage. Case escalated to supervisor after customer raised voice.", "issue_category": "Damaged / Lost Shipment Claim", "key_entities": {"awbs": ["15623478901"], "cities": ["Chennai"], "carriers": ["Xpressbees"], "products": ["laptop bag"], "order_ids": ["ORD-55621087"]}, "sentiment_opening": -0.4, "sentiment_middle": -0.7, "sentiment_closing": -0.8, "overall_mood": "angry", "sentiment_trajectory": "deteriorating", "sentiment_flags": [], "agent_tone": "defensive", "resolution_status": "escalated", "ai_score": 34.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 34, "call_closure": 3, "empathy_tone": 6, "call_efficiency": 3, "problem_solving": 6, "active_listening": 4, "accurate_information": 4, "compliance_adherence": 4, "professional_closing": 2, "greeting_quality": 2}, "alert_flags": ["negative_mood_unresolved", "escalation_risk", "customer_raised_voice"], "compliance_flags": ["inadequate_empathy", "defensive_tone"], "sop_compliance": [{"title": "Ownership & Commitment", "status": "followed", "evidence": "Agent took ownership of the issue and committed to a specific follow-up timeline."}, {"title": "Clear Next-Step Communication", "status": "followed", "evidence": "Agent clearly outlined the next steps and what the customer can expect."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-02-28 12:10:00", "call_ended_at": "2026-02-28 12:13:28", "transcribed_at": "2026-02-28 12:15:00", "analyzed_at": "2026-02-28 12:16:00", "created_at": "2026-02-28 12:10:00", "updated_at": "2026-02-28 23:10:00"}, {"id": 47.0, "external_call_id": "CALL-100262", "agent_id": 207.0, "agent_name": "Rahul Joshi", "agent_email": "rahul.joshi@shiprocket.com", "company_id": 110.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/e28b2659-55f4-41b1-8947-d0d7aed9adb0.wav", "duration_seconds": 173.0, "call_direction": "inbound", "language": "hi", "auto_summary": "Customer tracked a shipment showing last scan 2 days old. Agent pulled latest status, confirmed it's at the destination hub awaiting out-for-delivery. Customer accepted the updated ETA.", "issue_category": "Shipment Delay - In Transit", "key_entities": {"awbs": ["14728901234"], "cities": ["Hyderabad"], "carriers": ["Delhivery"], "products": [], "order_ids": []}, "sentiment_opening": 0.0, "sentiment_middle": 0.1, "sentiment_closing": 0.1, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "partially_resolved", "ai_score": 63.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 63, "call_closure": 5, "empathy_tone": 11, "call_efficiency": 5, "problem_solving": 11, "active_listening": 8, "accurate_information": 8, "compliance_adherence": 8, "professional_closing": 4, "greeting_quality": 3}, "alert_flags": [], "compliance_flags": [], "sop_compliance": [{"title": "Verification of Identity / Order Details", "status": "followed", "evidence": "Agent verified the AWB number and registered phone number before discussing order specifics."}, {"title": "Ownership & Commitment", "status": "followed", "evidence": "Agent took ownership of the issue and committed to a specific follow-up timeline."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}, {"title": "Clear Next-Step Communication", "status": "followed", "evidence": "Agent clearly outlined the next steps and what the customer can expect."}, {"title": "Accurate Information Sharing", "status": "followed", "evidence": "Agent provided accurate status as per the courier tracking system."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-01 15:17:00", "call_ended_at": "2026-03-01 15:18:46", "transcribed_at": "2026-03-01 15:22:00", "analyzed_at": "2026-03-01 15:23:00", "created_at": "2026-03-01 15:17:00", "updated_at": "2026-03-02 00:17:00"}, {"id": 48.0, "external_call_id": "CALL-100269", "agent_id": 208.0, "agent_name": "Ananya Pillai", "agent_email": "ananya.pillai@shiprocket.com", "company_id": 190.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/e2d7d7d8-4d63-4b6b-a632-c5ff56ca865d.wav", "duration_seconds": 198.0, "call_direction": "inbound", "language": "en", "auto_summary": "Seller reported unable to download shipping labels after panel update. Agent walked through browser cache clear, verified it works, and shared a help article link. Issue resolved on call.", "issue_category": "Portal Technical Issue", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": -0.3, "sentiment_middle": 0.0, "sentiment_closing": 0.4, "overall_mood": "frustrated", "sentiment_trajectory": "improving", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "resolved", "ai_score": 76.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 76, "call_closure": 6, "empathy_tone": 14, "call_efficiency": 6, "problem_solving": 14, "active_listening": 9, "accurate_information": 9, "compliance_adherence": 9, "professional_closing": 5, "greeting_quality": 4}, "alert_flags": [], "compliance_flags": [], "sop_compliance": [{"title": "Clear Next-Step Communication", "status": "followed", "evidence": "Agent clearly outlined the next steps and what the customer can expect."}, {"title": "Empathy Acknowledgement", "status": "followed", "evidence": "Agent acknowledged the customer's inconvenience and apologized sincerely."}, {"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}, {"title": "Ownership & Commitment", "status": "followed", "evidence": "Agent took ownership of the issue and committed to a specific follow-up timeline."}, {"title": "Verification of Identity / Order Details", "status": "followed", "evidence": "Agent verified the AWB number and registered phone number before discussing order specifics."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-03 11:15:00", "call_ended_at": "2026-03-03 11:19:40", "transcribed_at": "2026-03-03 11:20:00", "analyzed_at": "2026-03-03 11:21:00", "created_at": "2026-03-03 11:15:00", "updated_at": "2026-03-03 15:15:00"}, {"id": 49.0, "external_call_id": "CALL-100276", "agent_id": 209.0, "agent_name": "Harsh Goel", "agent_email": "harsh.goel@shiprocket.com", "company_id": 109.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/f79cde10-40a3-4e75-b1b7-0f3ba2fba3bc.wav", "duration_seconds": 227.0, "call_direction": "inbound", "language": "hi", "auto_summary": "Seller's pickup was missed 2 times despite courier commitment. Agent empathized, raised priority ticket with courier, and committed to a callback by EOD with reschedule confirmation.", "issue_category": "Shipment Delay - Pickup Pending", "key_entities": {"awbs": [], "cities": ["Pune"], "carriers": ["Ecom Express"], "products": [], "order_ids": []}, "sentiment_opening": -0.2, "sentiment_middle": -0.4, "sentiment_closing": -0.3, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 63.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 63, "call_closure": 5, "empathy_tone": 11, "call_efficiency": 5, "problem_solving": 11, "active_listening": 8, "accurate_information": 8, "compliance_adherence": 8, "professional_closing": 4, "greeting_quality": 3}, "alert_flags": ["negative_mood_unresolved"], "compliance_flags": [], "sop_compliance": [{"title": "Accurate Information Sharing", "status": "followed", "evidence": "Agent provided accurate status as per the courier tracking system."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Ownership & Commitment", "status": "followed", "evidence": "Agent took ownership of the issue and committed to a specific follow-up timeline."}, {"title": "Empathy Acknowledgement", "status": "followed", "evidence": "Agent acknowledged the customer's inconvenience and apologized sincerely."}, {"title": "Verification of Identity / Order Details", "status": "followed", "evidence": "Agent verified the AWB number and registered phone number before discussing order specifics."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-04 11:40:00", "call_ended_at": "2026-03-04 11:42:10", "transcribed_at": "2026-03-04 11:45:00", "analyzed_at": "2026-03-04 11:46:00", "created_at": "2026-03-04 11:40:00", "updated_at": "2026-03-04 22:40:00"}, {"id": 50.0, "external_call_id": "CALL-100283", "agent_id": 210.0, "agent_name": "Nisha Chauhan", "agent_email": "nisha.chauhan@shiprocket.com", "company_id": 190.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/071b8d6a-3edb-4bea-89a5-1c968a4d5086.wav", "duration_seconds": 150.0, "call_direction": "inbound", "language": "hi", "auto_summary": "Customer called to confirm refund credited to the original payment method. Agent verified the credit reference, walked the customer through the bank statement, and the customer confirmed the amount was visible.", "issue_category": "Refund Status", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": ["ORD-77345812"]}, "sentiment_opening": 0.2, "sentiment_middle": 0.4, "sentiment_closing": 0.6, "overall_mood": "neutral", "sentiment_trajectory": "improving", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "resolved", "ai_score": 74.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 74, "call_closure": 6, "empathy_tone": 13, "call_efficiency": 6, "problem_solving": 13, "active_listening": 9, "accurate_information": 9, "compliance_adherence": 9, "professional_closing": 5, "greeting_quality": 4}, "alert_flags": [], "compliance_flags": [], "sop_compliance": [{"title": "Empathy Acknowledgement", "status": "followed", "evidence": "Agent acknowledged the customer's inconvenience and apologized sincerely."}, {"title": "Accurate Information Sharing", "status": "followed", "evidence": "Agent provided accurate status as per the courier tracking system."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}, {"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}, {"title": "Ownership & Commitment", "status": "followed", "evidence": "Agent took ownership of the issue and committed to a specific follow-up timeline."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-06 10:18:00", "call_ended_at": "2026-03-06 10:21:21", "transcribed_at": "2026-03-06 10:23:00", "analyzed_at": "2026-03-06 10:24:00", "created_at": "2026-03-06 10:18:00", "updated_at": "2026-03-06 22:18:00"}, {"id": 51.0, "external_call_id": "CALL-100290", "agent_id": 211.0, "agent_name": "Varun Malhotra", "agent_email": "varun.malhotra@shiprocket.com", "company_id": 100.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/0d168cec-69e5-42f7-a722-931790d26324.wav", "duration_seconds": 155.0, "call_direction": "inbound", "language": "en", "auto_summary": "Seller asked about pricing for a new courier option. Agent read out rate slabs mechanically without probing seller's volume profile. Seller noted and said will decide later.", "issue_category": "Others", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.0, "sentiment_middle": 0.0, "sentiment_closing": 0.0, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "robotic", "resolution_status": "partially_resolved", "ai_score": 56.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 56, "call_closure": 4, "empathy_tone": 10, "call_efficiency": 4, "problem_solving": 10, "active_listening": 7, "accurate_information": 7, "compliance_adherence": 7, "professional_closing": 4, "greeting_quality": 3}, "alert_flags": [], "compliance_flags": ["script_heavy"], "sop_compliance": [{"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}, {"title": "Empathy Acknowledgement", "status": "followed", "evidence": "Agent acknowledged the customer's inconvenience and apologized sincerely."}, {"title": "Ownership & Commitment", "status": "followed", "evidence": "Agent took ownership of the issue and committed to a specific follow-up timeline."}, {"title": "Active Listening Without Interruption", "status": "violated", "evidence": "Agent interrupted the customer multiple times before the issue was fully stated."}, {"title": "Clear Next-Step Communication", "status": "followed", "evidence": "Agent clearly outlined the next steps and what the customer can expect."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-08 11:34:00", "call_ended_at": "2026-03-08 11:39:34", "transcribed_at": "2026-03-08 11:39:00", "analyzed_at": "2026-03-08 11:40:00", "created_at": "2026-03-08 11:34:00", "updated_at": "2026-03-08 19:34:00"}, {"id": 52.0, "external_call_id": "CALL-100297", "agent_id": 212.0, "agent_name": "Ritika Banerjee", "agent_email": "ritika.banerjee@shiprocket.com", "company_id": 110.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/31296690-cea4-4324-9d50-d88995768930.wav", "duration_seconds": 273.0, "call_direction": "inbound", "language": "hi", "auto_summary": "Seller's KYC was rejected for unclear GST document. Agent explained the reason, shared the correct document format, and promised to personally follow up on resubmission approval the next day.", "issue_category": "Account Activation / KYC", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": -0.2, "sentiment_middle": -0.3, "sentiment_closing": -0.2, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 59.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 59, "call_closure": 5, "empathy_tone": 11, "call_efficiency": 5, "problem_solving": 11, "active_listening": 7, "accurate_information": 7, "compliance_adherence": 7, "professional_closing": 4, "greeting_quality": 3}, "alert_flags": [], "compliance_flags": [], "sop_compliance": [{"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}, {"title": "Accurate Information Sharing", "status": "followed", "evidence": "Agent provided accurate status as per the courier tracking system."}, {"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}, {"title": "Empathy Acknowledgement", "status": "followed", "evidence": "Agent acknowledged the customer's inconvenience and apologized sincerely."}, {"title": "Verification of Identity / Order Details", "status": "followed", "evidence": "Agent verified the AWB number and registered phone number before discussing order specifics."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-09 10:05:00", "call_ended_at": "2026-03-09 10:09:37", "transcribed_at": "2026-03-09 10:10:00", "analyzed_at": "2026-03-09 10:11:00", "created_at": "2026-03-09 10:05:00", "updated_at": "2026-03-09 17:05:00"}, {"id": 53.0, "external_call_id": "CALL-100304", "agent_id": 213.0, "agent_name": "Siddharth Menon", "agent_email": "siddharth.menon@shiprocket.com", "company_id": 109.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/3c4e7fa5-6773-48ed-8893-835363bd3d61.wav", "duration_seconds": 281.0, "call_direction": "inbound", "language": "hi", "auto_summary": "Customer's urgent shipment (birthday gift) stuck at sorting center for 5 days. Agent tried to contact hub in real time but could not get live status. Customer left disappointed; no resolution.", "issue_category": "Shipment Delay - In Transit", "key_entities": {"awbs": ["14725632789"], "cities": ["Kolkata"], "carriers": ["Delhivery"], "products": ["gift hamper"], "order_ids": []}, "sentiment_opening": -0.1, "sentiment_middle": -0.5, "sentiment_closing": -0.6, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "unresolved", "ai_score": 59.0, "human_score": 54.0, "human_score_by_id": 2.0, "score_details": {"total": 59, "call_closure": 5, "empathy_tone": 11, "call_efficiency": 5, "problem_solving": 11, "active_listening": 7, "accurate_information": 7, "compliance_adherence": 7, "professional_closing": 4, "greeting_quality": 3}, "alert_flags": ["negative_mood_unresolved", "vip_urgency_missed"], "compliance_flags": [], "sop_compliance": [{"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}, {"title": "Clear Next-Step Communication", "status": "followed", "evidence": "Agent clearly outlined the next steps and what the customer can expect."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Empathy Acknowledgement", "status": "followed", "evidence": "Agent acknowledged the customer's inconvenience and apologized sincerely."}, {"title": "Accurate Information Sharing", "status": "followed", "evidence": "Agent provided accurate status as per the courier tracking system."}], "audit_status": "human_reviewed", "qa_remarks": "Agent could have shown more ownership. Score downgraded.", "call_started_at": "2026-03-11 17:48:00", "call_ended_at": "2026-03-11 17:52:36", "transcribed_at": "2026-03-11 17:53:00", "analyzed_at": "2026-03-11 17:54:00", "created_at": "2026-03-11 17:48:00", "updated_at": "2026-03-12 12:48:00"}, {"id": 54.0, "external_call_id": "CALL-100311", "agent_id": 214.0, "agent_name": "Divya Shetty", "agent_email": "divya.shetty@shiprocket.com", "company_id": 101.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/54c6e244-27ea-400d-8dd4-4fdcb8002f9a.wav", "duration_seconds": 170.0, "call_direction": "inbound", "language": "hi", "auto_summary": "Seller's RTO refund is pending 12 days beyond SLA. Agent acknowledged the delay, escalated with finance team, and committed to a callback within 48 hours.", "issue_category": "Refund Status", "key_entities": {"awbs": ["14738291056"], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": -0.3, "sentiment_middle": -0.2, "sentiment_closing": -0.2, "overall_mood": "frustrated", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 59.0, "human_score": 74.0, "human_score_by_id": 3.0, "score_details": {"total": 59, "call_closure": 5, "empathy_tone": 11, "call_efficiency": 5, "problem_solving": 11, "active_listening": 7, "accurate_information": 7, "compliance_adherence": 7, "professional_closing": 4, "greeting_quality": 3}, "alert_flags": ["sla_breach"], "compliance_flags": [], "sop_compliance": [{"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}, {"title": "Accurate Information Sharing", "status": "followed", "evidence": "Agent provided accurate status as per the courier tracking system."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}, {"title": "Empathy Acknowledgement", "status": "followed", "evidence": "Agent acknowledged the customer's inconvenience and apologized sincerely."}, {"title": "Verification of Identity / Order Details", "status": "followed", "evidence": "Agent verified the AWB number and registered phone number before discussing order specifics."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}], "audit_status": "human_reviewed", "qa_remarks": "AI underestimated empathy shown. Agent was genuinely helpful.", "call_started_at": "2026-03-12 17:14:00", "call_ended_at": "2026-03-12 17:18:00", "transcribed_at": "2026-03-12 17:19:00", "analyzed_at": "2026-03-12 17:20:00", "created_at": "2026-03-12 17:14:00", "updated_at": "2026-03-13 11:14:00"}, {"id": 55.0, "external_call_id": "CALL-100318", "agent_id": 215.0, "agent_name": "Gaurav Chauhan", "agent_email": "gaurav.chauhan@shiprocket.com", "company_id": 109.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/66a1dd77-ed92-4e21-8193-5e5cc9214eda.wav", "duration_seconds": 95.0, "call_direction": "inbound", "language": "en", "auto_summary": "Seller called about pickup scheduled for today which did not happen. Agent checked courier FSE status, arranged an immediate reschedule for evening slot, and confirmed with the seller. Seller appreciated the quick resolution.", "issue_category": "Shipment Delay - Pickup Pending", "key_entities": {"awbs": [], "cities": ["Ahmedabad"], "carriers": ["Bluedart"], "products": [], "order_ids": []}, "sentiment_opening": -0.1, "sentiment_middle": 0.2, "sentiment_closing": 0.6, "overall_mood": "positive", "sentiment_trajectory": "improving", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "resolved", "ai_score": 88.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 88, "call_closure": 7, "empathy_tone": 16, "call_efficiency": 7, "problem_solving": 16, "active_listening": 11, "accurate_information": 11, "compliance_adherence": 11, "professional_closing": 6, "greeting_quality": 4}, "alert_flags": [], "compliance_flags": [], "sop_compliance": [{"title": "Verification of Identity / Order Details", "status": "followed", "evidence": "Agent verified the AWB number and registered phone number before discussing order specifics."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Clear Next-Step Communication", "status": "followed", "evidence": "Agent clearly outlined the next steps and what the customer can expect."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}, {"title": "Empathy Acknowledgement", "status": "followed", "evidence": "Agent acknowledged the customer's inconvenience and apologized sincerely."}, {"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-14 11:46:00", "call_ended_at": "2026-03-14 11:51:29", "transcribed_at": "2026-03-14 11:51:00", "analyzed_at": "2026-03-14 11:52:00", "created_at": "2026-03-14 11:46:00", "updated_at": "2026-03-15 01:46:00"}, {"id": 56.0, "external_call_id": "CALL-100325", "agent_id": 216.0, "agent_name": "Tanvi Desai", "agent_email": "tanvi.desai@shiprocket.com", "company_id": 190.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/7cf902dd-ab07-44ae-ad9c-6588dcabc493.wav", "duration_seconds": 209.0, "call_direction": "inbound", "language": "hi", "auto_summary": "Seller disputed 2 NDR marked 'customer refused'. Agent logged the dispute, flagged for reattempt, and informed seller that status would update in 24 hours.", "issue_category": "NDR - Non-Delivery Report Update", "key_entities": {"awbs": ["14729187345", "14729187401"], "cities": [], "carriers": ["Ecom Express"], "products": [], "order_ids": []}, "sentiment_opening": 0.0, "sentiment_middle": 0.1, "sentiment_closing": 0.1, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "partially_resolved", "ai_score": 60.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 60, "call_closure": 5, "empathy_tone": 11, "call_efficiency": 5, "problem_solving": 11, "active_listening": 7, "accurate_information": 7, "compliance_adherence": 7, "professional_closing": 4, "greeting_quality": 3}, "alert_flags": [], "compliance_flags": [], "sop_compliance": [{"title": "Ownership & Commitment", "status": "followed", "evidence": "Agent took ownership of the issue and committed to a specific follow-up timeline."}, {"title": "Clear Next-Step Communication", "status": "followed", "evidence": "Agent clearly outlined the next steps and what the customer can expect."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}, {"title": "Accurate Information Sharing", "status": "followed", "evidence": "Agent provided accurate status as per the courier tracking system."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-16 16:55:00", "call_ended_at": "2026-03-16 16:59:36", "transcribed_at": "2026-03-16 17:00:00", "analyzed_at": "2026-03-16 17:01:00", "created_at": "2026-03-16 16:55:00", "updated_at": "2026-03-17 10:55:00"}, {"id": 57.0, "external_call_id": "CALL-100332", "agent_id": 217.0, "agent_name": "Rajat Khurana", "agent_email": "rajat.khurana@shiprocket.com", "company_id": 101.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/9c76fb0b-f269-4cec-9ef4-0c51f6476293.wav", "duration_seconds": 294.0, "call_direction": "inbound", "language": "hi", "auto_summary": "Customer angry that shipment marked 'incorrect address' when address was correct. Agent kept citing courier's input without validating. Case escalated after customer threatened social media complaint.", "issue_category": "Shipment Delay - Delivery Failed / Incorrect Address", "key_entities": {"awbs": ["15478923011"], "cities": ["Gurgaon"], "carriers": ["Xpressbees"], "products": [], "order_ids": []}, "sentiment_opening": -0.3, "sentiment_middle": -0.7, "sentiment_closing": -0.8, "overall_mood": "angry", "sentiment_trajectory": "deteriorating", "sentiment_flags": [], "agent_tone": "defensive", "resolution_status": "escalated", "ai_score": 35.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 35, "call_closure": 3, "empathy_tone": 6, "call_efficiency": 3, "problem_solving": 6, "active_listening": 4, "accurate_information": 4, "compliance_adherence": 4, "professional_closing": 2, "greeting_quality": 2}, "alert_flags": ["negative_mood_unresolved", "social_media_threat", "escalation_risk"], "compliance_flags": ["defensive_tone"], "sop_compliance": [{"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Ownership & Commitment", "status": "violated", "evidence": "Agent deflected responsibility to another team without taking ownership."}, {"title": "Accurate Information Sharing", "status": "followed", "evidence": "Agent provided accurate status as per the courier tracking system."}, {"title": "Clear Next-Step Communication", "status": "followed", "evidence": "Agent clearly outlined the next steps and what the customer can expect."}, {"title": "Verification of Identity / Order Details", "status": "followed", "evidence": "Agent verified the AWB number and registered phone number before discussing order specifics."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-17 16:08:00", "call_ended_at": "2026-03-17 16:11:18", "transcribed_at": "2026-03-17 16:13:00", "analyzed_at": "2026-03-17 16:14:00", "created_at": "2026-03-17 16:08:00", "updated_at": "2026-03-18 00:08:00"}, {"id": 58.0, "external_call_id": "CALL-100339", "agent_id": 218.0, "agent_name": "Shreya Nambiar", "agent_email": "shreya.nambiar@shiprocket.com", "company_id": 109.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/9d04bce3-cd35-4193-8967-902ea39bce82.wav", "duration_seconds": 183.0, "call_direction": "inbound", "language": "en", "auto_summary": "Seller called to get bulk shipment status. Agent pulled 8 AWBs, explained hub-wise status, committed callback with EOD summary from courier support team.", "issue_category": "Shipment Delay - In Transit", "key_entities": {"awbs": ["14726712345", "14726712346", "14726712347"], "cities": ["Jaipur"], "carriers": ["Delhivery"], "products": [], "order_ids": []}, "sentiment_opening": 0.0, "sentiment_middle": 0.1, "sentiment_closing": 0.0, "overall_mood": "neutral", "sentiment_trajectory": "stable", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "callback_promised", "ai_score": 65.0, "human_score": 70.0, "human_score_by_id": 1.0, "score_details": {"total": 65, "call_closure": 5, "empathy_tone": 12, "call_efficiency": 5, "problem_solving": 12, "active_listening": 8, "accurate_information": 8, "compliance_adherence": 8, "professional_closing": 5, "greeting_quality": 3}, "alert_flags": [], "compliance_flags": [], "sop_compliance": [{"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}, {"title": "Empathy Acknowledgement", "status": "followed", "evidence": "Agent acknowledged the customer's inconvenience and apologized sincerely."}, {"title": "Verification of Identity / Order Details", "status": "followed", "evidence": "Agent verified the AWB number and registered phone number before discussing order specifics."}, {"title": "Accurate Information Sharing", "status": "followed", "evidence": "Agent provided accurate status as per the courier tracking system."}, {"title": "Ownership & Commitment", "status": "followed", "evidence": "Agent took ownership of the issue and committed to a specific follow-up timeline."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}], "audit_status": "human_reviewed", "qa_remarks": "AI score seems accurate based on call handling.", "call_started_at": "2026-03-19 11:26:00", "call_ended_at": "2026-03-19 11:29:34", "transcribed_at": "2026-03-19 11:31:00", "analyzed_at": "2026-03-19 11:32:00", "created_at": "2026-03-19 11:26:00", "updated_at": "2026-03-19 18:26:00"}, {"id": 59.0, "external_call_id": "CALL-100346", "agent_id": 219.0, "agent_name": "Kunal Trivedi", "agent_email": "kunal.trivedi@shiprocket.com", "company_id": 110.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260220/ddf6e7a4-c884-4f40-a73a-5d79affce2dd.wav", "duration_seconds": 110.0, "call_direction": "inbound", "language": "hi", "auto_summary": "Seller called to understand monthly invoicing cycle. Agent explained clearly with examples, shared a help article, and confirmed next invoice date. Seller was satisfied.", "issue_category": "Others", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": []}, "sentiment_opening": 0.3, "sentiment_middle": 0.5, "sentiment_closing": 0.7, "overall_mood": "positive", "sentiment_trajectory": "improving", "sentiment_flags": [], "agent_tone": "empathetic", "resolution_status": "resolved", "ai_score": 76.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 76, "call_closure": 6, "empathy_tone": 14, "call_efficiency": 6, "problem_solving": 14, "active_listening": 9, "accurate_information": 9, "compliance_adherence": 9, "professional_closing": 5, "greeting_quality": 4}, "alert_flags": [], "compliance_flags": [], "sop_compliance": [{"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}, {"title": "Accurate Information Sharing", "status": "followed", "evidence": "Agent provided accurate status as per the courier tracking system."}, {"title": "Verification of Identity / Order Details", "status": "followed", "evidence": "Agent verified the AWB number and registered phone number before discussing order specifics."}, {"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}, {"title": "Clear Next-Step Communication", "status": "followed", "evidence": "Agent clearly outlined the next steps and what the customer can expect."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-20 13:13:00", "call_ended_at": "2026-03-20 13:18:37", "transcribed_at": "2026-03-20 13:18:00", "analyzed_at": "2026-03-20 13:19:00", "created_at": "2026-03-20 13:13:00", "updated_at": "2026-03-21 06:13:00"}, {"id": 60.0, "external_call_id": "CALL-100353", "agent_id": 220.0, "agent_name": "Pallavi Saxena", "agent_email": "pallavi.saxena@shiprocket.com", "company_id": 190.0, "audio_url": "https://telephonycloud.co.in/recordings/479/260218/00dc7192-f446-4f1e-87c6-8dd9f7bd6257.wav", "duration_seconds": 189.0, "call_direction": "inbound", "language": "hi", "auto_summary": "Customer raised concern about refund pending for 20 days. Agent read standard response without investigating the specific case. Customer disconnected frustrated, no concrete next step offered.", "issue_category": "Refund Status", "key_entities": {"awbs": [], "cities": [], "carriers": [], "products": [], "order_ids": ["ORD-44628903"]}, "sentiment_opening": -0.3, "sentiment_middle": -0.5, "sentiment_closing": -0.7, "overall_mood": "frustrated", "sentiment_trajectory": "deteriorating", "sentiment_flags": [], "agent_tone": "robotic", "resolution_status": "unresolved", "ai_score": 34.0, "human_score": null, "human_score_by_id": null, "score_details": {"total": 34, "call_closure": 3, "empathy_tone": 6, "call_efficiency": 3, "problem_solving": 6, "active_listening": 4, "accurate_information": 4, "compliance_adherence": 4, "professional_closing": 2, "greeting_quality": 2}, "alert_flags": ["negative_mood_unresolved", "customer_disconnected", "sla_breach"], "compliance_flags": ["script_heavy", "no_investigation"], "sop_compliance": [{"title": "Active Listening Without Interruption", "status": "followed", "evidence": "Agent allowed the customer to explain the issue fully without interrupting."}, {"title": "Accurate Information Sharing", "status": "violated", "evidence": "Agent provided vague or unverified information without checking the system."}, {"title": "Professional Closing", "status": "followed", "evidence": "Agent thanked the customer and closed the call professionally."}, {"title": "Clear Next-Step Communication", "status": "violated", "evidence": "Agent ended the call without explaining what happens next."}, {"title": "Professional Greeting & Self-Introduction", "status": "followed", "evidence": "Agent greeted the customer warmly and introduced themselves clearly at the start of the call."}, {"title": "Empathy Acknowledgement", "status": "followed", "evidence": "Agent acknowledged the customer's inconvenience and apologized sincerely."}], "audit_status": "ai_only", "qa_remarks": null, "call_started_at": "2026-03-22 10:54:00", "call_ended_at": "2026-03-22 10:56:17", "transcribed_at": "2026-03-22 10:59:00", "analyzed_at": "2026-03-22 11:00:00", "created_at": "2026-03-22 10:54:00", "updated_at": "2026-03-22 13:54:00"}];
+
+// Normalize numeric fields
+DATA.forEach(r => {
+  ['ai_score','human_score','duration_seconds','sentiment_opening','sentiment_middle','sentiment_closing','agent_id']
+    .forEach(k => { if (r[k] != null && r[k] !== '') r[k] = Number(r[k]); });
+});
+
+document.getElementById('record-count').textContent = DATA.length;
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+let charts = {};
+let agentSort = { col: 'avg_score', dir: 'desc' };
+let callsPage = 1;
+const PER_PAGE = 20;
+let expandedRow = null;
+let kpiFilter = null;
+
+// ═══════════════════════════════════════════════
+// DATE PICKERS
+// ═══════════════════════════════════════════════
+const fpOpts = { dateFormat: 'Y-m-d', disableMobile: false };
+flatpickr('#date-from', { ...fpOpts });
+flatpickr('#date-to', { ...fpOpts });
+
+['date-from','date-to','filter-mood','filter-resolution'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => { callsPage = 1; refreshAll(); });
+});
+
+// ═══════════════════════════════════════════════
+// FILTERS
+// ═══════════════════════════════════════════════
+function getFilters() {
+  return {
+    date_from: document.getElementById('date-from').value || '',
+    date_to: document.getElementById('date-to').value || '',
+    overall_mood: document.getElementById('filter-mood').value || '',
+    resolution_status: document.getElementById('filter-resolution').value || '',
+    audit_status: kpiFilter?.audit_status || '',
+    kpi_resolution: kpiFilter?.resolution_status || ''
+  };
+}
+
+function applyFilters(records, filters) {
+  return records.filter(r => {
+    if (filters.date_from) {
+      const rd = new Date(r.created_at).toISOString().split('T')[0];
+      if (rd < filters.date_from) return false;
+    }
+    if (filters.date_to) {
+      const rd = new Date(r.created_at).toISOString().split('T')[0];
+      if (rd > filters.date_to) return false;
+    }
+    if (filters.overall_mood && r.overall_mood !== filters.overall_mood) return false;
+    if (filters.resolution_status && r.resolution_status !== filters.resolution_status) return false;
+    if (filters.kpi_resolution && r.resolution_status !== filters.kpi_resolution) return false;
+    if (filters.audit_status && r.audit_status !== filters.audit_status) return false;
+    return true;
+  });
+}
+
+function applyKpiFilter(type) {
+  if (kpiFilter?.type === type) { clearKpiFilter(); return; }
+  if (type === 'pending')   kpiFilter = { type, label:'Pending Audit',   audit_status:'pending',      color:'#f59e0b' };
+  else if (type === 'escalated') kpiFilter = { type, label:'Escalated Calls', resolution_status:'escalated', color:'#ef4444' };
+  document.getElementById('filter-resolution').value = '';
+  callsPage = 1;
+  renderKpiFilterBanner();
+  refreshAll();
+  document.getElementById('calls-section').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function clearKpiFilter() {
+  kpiFilter = null;
+  renderKpiFilterBanner();
+  ['kpi-pending','kpi-escalated'].forEach(id => { const el = document.getElementById(id); if (el) el.style.boxShadow = ''; });
+  callsPage = 1;
+  refreshAll();
+}
+
+function renderKpiFilterBanner() {
+  const banner = document.getElementById('kpi-filter-banner');
+  if (!kpiFilter) { banner.style.display = 'none'; return; }
+  banner.style.display = 'flex';
+  banner.innerHTML = `
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${kpiFilter.color}" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+    <span style="font-size:13px;color:#e2e8f0;">Showing: <strong style="color:${kpiFilter.color};">${kpiFilter.label}</strong></span>
+    <button onclick="clearKpiFilter()" style="margin-left:auto;background:rgba(255,255,255,0.06);border:1px solid #2a2d3e;border-radius:6px;color:#8892a4;padding:2px 10px;font-size:12px;cursor:pointer;">✕ Clear Filter</button>`;
+}
+
+// ═══════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════
+function scoreColor(v) {
+  if (v == null || v === '' || isNaN(v)) return '#8892a4';
+  if (v > 75) return '#10b981';
+  if (v >= 50) return '#f59e0b';
+  return '#ef4444';
+}
+function scoreClass(v) {
+  if (v == null || isNaN(v)) return '';
+  if (v > 75) return 'score-green';
+  if (v >= 50) return 'score-yellow';
+  return 'score-red';
+}
+function scoreBadgeClass(v) {
+  if (v == null || isNaN(v)) return 'badge-gray';
+  if (v > 75) return 'badge-green';
+  if (v >= 50) return 'badge-yellow';
+  return 'badge-red';
+}
+
+const MOOD_COLORS = { positive:'#10b981', neutral:'#60a5fa', frustrated:'#f97316', angry:'#ef4444', distressed:'#a855f7' };
+const MOOD_BG = { positive:'badge-green', neutral:'badge-blue', frustrated:'badge-orange', angry:'badge-red', distressed:'badge-purple' };
+const RES_COLORS = { resolved:'#10b981', unresolved:'#ef4444', escalated:'#f97316', partially_resolved:'#f59e0b', callback_promised:'#60a5fa' };
+const RES_BG = { resolved:'badge-green', unresolved:'badge-red', escalated:'badge-orange', partially_resolved:'badge-yellow', callback_promised:'badge-blue' };
+const STATUS_BG = { completed:'badge-green', pending:'badge-gray', ai_only:'badge-blue', human_reviewed:'badge-green', disputed:'badge-red', in_progress:'badge-blue', audited:'badge-green' };
+const MOOD_SCORE = { positive:1, neutral:0.5, frustrated:-0.3, angry:-0.7, distressed:-0.8 };
+
+function fmtDuration(s) { if (!s) return '—'; const m = Math.floor(s/60), sec = Math.round(s%60); return `${m}:${String(sec).padStart(2,'0')}`; }
+function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }); }
+function fmtScore(v) { if (v == null || v === '' || isNaN(v)) return '—'; return Number(v).toFixed(1); }
+function avg(arr) { const v = arr.filter(x => x != null && !isNaN(x)); return v.length ? v.reduce((a,b)=>a+Number(b),0) / v.length : null; }
+
+// ═══════════════════════════════════════════════
+// CALL DETAIL MODAL
+// ═══════════════════════════════════════════════
+function openCallDetail(id) {
+  const r = DATA.find(x => x.id === id);
+  if (!r) { toast('Call record not found', 'error'); return; }
+
+  document.getElementById('modal-title').textContent =
+    `${r.agent_name || 'Unknown Agent'} · ${r.external_call_id || '#' + r.id}`;
+
+  const audioHtml = r.audio_url
+    ? `<audio controls preload="metadata" src="${r.audio_url}">Your browser does not support audio playback.</audio>
+       <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#8892a4;">
+         <span>Duration: ${fmtDuration(r.duration_seconds)}</span>
+         <a href="${r.audio_url}" target="_blank" rel="noopener" style="color:#818cf8;text-decoration:none;">Open in new tab ↗</a>
+       </div>`
+    : `<div style="color:#8892a4;font-size:13px;text-align:center;padding:20px;">No recording URL available for this call.</div>`;
+
+  const sops = Array.isArray(r.sop_compliance) ? r.sop_compliance
+             : (typeof r.sop_compliance === 'string'
+                ? (()=>{ try{return JSON.parse(r.sop_compliance);} catch{return [];} })()
+                : []);
+
+  document.getElementById('modal-body').innerHTML = `
+    <div>
+      <div class="field-label">🎵 Original Recording</div>
+      <div class="audio-wrap">${audioHtml}</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+      <div class="card2" style="padding:12px;">
+        <div style="font-size:10px;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">AI Score</div>
+        <div style="font-size:22px;font-weight:800;color:${scoreColor(r.ai_score)};">${fmtScore(r.ai_score)}</div>
+      </div>
+      <div class="card2" style="padding:12px;">
+        <div style="font-size:10px;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Human Score</div>
+        <div style="font-size:22px;font-weight:800;color:${scoreColor(r.human_score)};">${fmtScore(r.human_score)}</div>
+      </div>
+      <div class="card2" style="padding:12px;">
+        <div style="font-size:10px;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Mood</div>
+        <div style="margin-top:4px;"><span class="badge ${MOOD_BG[r.overall_mood] || 'badge-gray'}" style="font-size:13px;padding:3px 10px;">${r.overall_mood || '—'}</span></div>
+      </div>
+      <div class="card2" style="padding:12px;">
+        <div style="font-size:10px;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Resolution</div>
+        <div style="margin-top:4px;"><span class="badge ${RES_BG[r.resolution_status] || 'badge-gray'}" style="font-size:13px;padding:3px 10px;">${(r.resolution_status || '—').replace(/_/g,' ')}</span></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="field-label">📝 Auto Summary</div>
+      <div style="font-size:13px;color:#e2e8f0;line-height:1.7;background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;padding:14px;">
+        ${r.auto_summary || 'No summary available.'}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div>
+        <div class="field-label">Call Info</div>
+        <div class="card2" style="padding:14px;display:flex;flex-direction:column;gap:7px;font-size:12px;">
+          <div style="display:flex;justify-content:space-between;"><span style="color:#8892a4;">Call ID</span><span style="color:#e2e8f0;font-family:monospace;">${r.external_call_id || r.id}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#8892a4;">Direction</span><span style="color:#e2e8f0;">${r.call_direction || '—'}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#8892a4;">Language</span><span style="color:#e2e8f0;">${r.language || '—'}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#8892a4;">Category</span><span style="color:#e2e8f0;">${r.issue_category || '—'}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#8892a4;">Agent Tone</span><span style="color:#e2e8f0;">${r.agent_tone || '—'}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#8892a4;">Sentiment Arc</span><span style="color:#e2e8f0;">${r.sentiment_trajectory || '—'}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#8892a4;">Started</span><span style="color:#e2e8f0;">${fmtDate(r.call_started_at)}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#8892a4;">Audit Status</span><span><span class="badge ${STATUS_BG[r.audit_status]||'badge-gray'}">${(r.audit_status||'—').replace(/_/g,' ')}</span></span></div>
+        </div>
+      </div>
+      <div>
+        <div class="field-label">Flags</div>
+        <div class="card2" style="padding:14px;display:flex;flex-direction:column;gap:10px;">
+          <div>
+            <div style="font-size:11px;color:#8892a4;margin-bottom:5px;">Alert Flags</div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;">${parseFlags(r.alert_flags).length ? parseFlags(r.alert_flags).map(f => `<span class="badge badge-red">⚠ ${f}</span>`).join('') : '<span style="font-size:12px;color:#8892a4;">None</span>'}</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#8892a4;margin-bottom:5px;">Compliance Flags</div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;">${parseFlags(r.compliance_flags).length ? parseFlags(r.compliance_flags).map(f => `<span class="badge badge-orange">⛨ ${f}</span>`).join('') : '<span style="font-size:12px;color:#8892a4;">None</span>'}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    ${sops.length ? `<div>
+      <div class="field-label">SOP Compliance (${sops.filter(s=>s.status==='followed').length}/${sops.length} followed)</div>
+      <div style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;">
+        ${sops.map(s => {
+          const ok = s.status === 'followed';
+          return `<div style="border-left:3px solid ${ok?'#10b981':'#ef4444'};background:${ok?'rgba(16,185,129,0.06)':'rgba(239,68,68,0.06)'};padding:8px 12px;border-radius:0 6px 6px 0;">
+            <div style="font-size:12px;font-weight:600;color:#e2e8f0;">${s.title || '—'} <span style="font-size:10px;color:${ok?'#10b981':'#ef4444'};">[${s.status}]</span></div>
+            ${s.evidence ? `<div style="font-size:11px;color:#8892a4;margin-top:3px;">${s.evidence}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+
+    ${r.qa_remarks ? `<div>
+      <div class="field-label">QA Remarks</div>
+      <div class="card2" style="padding:12px;font-size:13px;color:#e2e8f0;font-style:italic;">"${r.qa_remarks}"</div>
+    </div>` : ''}
+  `;
+
+  document.getElementById('call-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCallDetail(e) {
+  if (e && e.target !== e.currentTarget) return; // only close on backdrop click
+  const modal = document.getElementById('call-modal');
+  // Stop any playing audio
+  const audio = modal.querySelector('audio');
+  if (audio) { audio.pause(); audio.currentTime = 0; }
+  modal.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ═══════════════════════════════════════════════
+// SCORE BREAKDOWN MODAL
+// ═══════════════════════════════════════════════
+// Human-readable labels for score parameter keys
+const SCORE_LABELS = {
+  // Original CSV schema
+  opening_greeting:       { label: 'Opening & Greeting',        max: 10, icon: '👋' },
+  empathy_tone:           { label: 'Empathy & Tone',            max: 15, icon: '❤️' },
+  active_listening:       { label: 'Active Listening',          max: 10, icon: '👂' },
+  product_knowledge:      { label: 'Product Knowledge',         max: 15, icon: '📚' },
+  problem_solving:        { label: 'Problem Solving',           max: 15, icon: '🧩' },
+  call_efficiency:        { label: 'Call Efficiency',           max: 10, icon: '⚡' },
+  compliance_adherence:   { label: 'Compliance Adherence',      max: 15, icon: '🛡️' },
+  hold_transfer_protocol: { label: 'Hold / Transfer Protocol',  max: 5,  icon: '🔀' },
+  call_closure:           { label: 'Call Closure',              max: 5,  icon: '✅' },
+  // Synthetic schema (fallback for dummy records)
+  greeting_quality:       { label: 'Greeting Quality',          max: 10, icon: '👋' },
+  accurate_information:   { label: 'Accurate Information',      max: 15, icon: '🎯' },
+  professional_closing:   { label: 'Professional Closing',      max: 10, icon: '🎓' },
+};
+
+function paramColor(got, max) {
+  if (max === 0 || got == null) return '#8892a4';
+  const pct = (got / max) * 100;
+  if (pct >= 80) return '#10b981';
+  if (pct >= 50) return '#f59e0b';
+  return '#ef4444';
+}
+
+function openScoreBreakdown(id) {
+  const r = DATA.find(x => x.id === id);
+  if (!r) { toast('Record not found', 'error'); return; }
+
+  let sd = r.score_details;
+  if (typeof sd === 'string') {
+    try { sd = JSON.parse(sd); } catch { sd = null; }
+  }
+
+  document.getElementById('score-modal-title').textContent =
+    `${r.agent_name || 'Unknown'} · ${r.external_call_id || '#' + r.id}`;
+
+  const totalScore = r.ai_score != null ? Number(r.ai_score) : null;
+  const totalColor = scoreColor(totalScore);
+
+  // Build parameter rows from score_details (excluding 'total')
+  const paramKeys = sd ? Object.keys(sd).filter(k => k !== 'total') : [];
+
+  const paramHtml = paramKeys.length === 0
+    ? `<div style="color:#8892a4;font-size:13px;text-align:center;padding:30px;">No parameter-wise breakdown available for this call.</div>`
+    : paramKeys.map(k => {
+        const info = SCORE_LABELS[k] || { label: k.replace(/_/g, ' '), max: 15, icon: '•' };
+        const val = Number(sd[k] || 0);
+        const max = info.max;
+        const pct = max > 0 ? Math.min(100, (val / max) * 100) : 0;
+        const c = paramColor(val, max);
+        return `
+          <div style="display:flex;flex-direction:column;gap:6px;padding:10px 12px;background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:16px;">${info.icon}</span>
+                <span style="font-size:13px;color:#e2e8f0;font-weight:600;">${info.label}</span>
+              </div>
+              <div style="display:flex;align-items:baseline;gap:4px;">
+                <span style="font-size:18px;font-weight:800;color:${c};">${val}</span>
+                <span style="font-size:12px;color:#8892a4;">/ ${max}</span>
+              </div>
+            </div>
+            <div class="score-bar-bg"><div class="score-bar-fill" style="width:${pct}%;background:${c};"></div></div>
+          </div>`;
+      }).join('');
+
+  // Also show human score comparison if available
+  const humanBlock = r.human_score != null
+    ? `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.25);border-radius:10px;">
+         <div>
+           <div style="font-size:11px;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;">Human Reviewer Score</div>
+           <div style="font-size:12px;color:#e2e8f0;margin-top:3px;">${r.qa_remarks ? '"' + r.qa_remarks + '"' : 'No remarks'}</div>
+         </div>
+         <div style="font-size:28px;font-weight:800;color:${scoreColor(r.human_score)};">${fmtScore(r.human_score)}</div>
+       </div>`
+    : `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(148,163,184,0.06);border:1px solid var(--border);border-radius:10px;">
+         <div>
+           <div style="font-size:11px;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;">Human Reviewer Score</div>
+           <div style="font-size:12px;color:#8892a4;margin-top:3px;">Not yet reviewed</div>
+         </div>
+         <div style="font-size:20px;font-weight:700;color:#8892a4;">—</div>
+       </div>`;
+
+  document.getElementById('score-modal-body').innerHTML = `
+    <!-- Total score header -->
+    <div style="background:linear-gradient(135deg,${totalColor}22,${totalColor}11);border:1px solid ${totalColor}55;border-radius:12px;padding:20px;text-align:center;">
+      <div style="font-size:11px;color:#8892a4;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Overall AI Score</div>
+      <div style="font-size:56px;font-weight:900;color:${totalColor};line-height:1;">${fmtScore(totalScore)}</div>
+      <div style="font-size:12px;color:#8892a4;margin-top:6px;">out of 100</div>
+    </div>
+
+    <!-- Parameter-wise breakdown -->
+    <div>
+      <div class="field-label">📊 Parameter-wise Breakdown</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        ${paramHtml}
+      </div>
+    </div>
+
+    <!-- Human score -->
+    ${humanBlock}
+
+    <!-- Alert/compliance flags relevant to scoring -->
+    ${(parseFlags(r.alert_flags).length || parseFlags(r.compliance_flags).length) ? `
+      <div>
+        <div class="field-label">⚠️ Flags That Affected Scoring</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${parseFlags(r.alert_flags).map(f => `<span class="badge badge-red">⚠ ${f}</span>`).join('')}
+          ${parseFlags(r.compliance_flags).map(f => `<span class="badge badge-orange">⛨ ${f}</span>`).join('')}
+        </div>
+      </div>` : ''}
+  `;
+
+  document.getElementById('score-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeScoreBreakdown(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('score-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Close on Escape key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('call-modal').classList.contains('open')) closeCallDetail();
+    if (document.getElementById('score-modal').classList.contains('open')) closeScoreBreakdown();
+  }
+});
+
+// ═══════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════
+function toast(msg, type = 'info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  const icons = { error:'⚠', success:'✓', info:'ℹ' };
+  t.innerHTML = `<span style="font-size:16px;">${icons[type]||'ℹ'}</span><span>${msg}</span>`;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => { t.style.animation = 'fadeOut 0.3s ease forwards'; setTimeout(() => t.remove(), 300); }, 4000);
+}
+
+// ═══════════════════════════════════════════════
+// CHARTS
+// ═══════════════════════════════════════════════
+const chartDefaults = {
+  plugins: { legend: { display:false }, tooltip: { backgroundColor:'#1a1d27', borderColor:'#2a2d3e', borderWidth:1, titleColor:'#e2e8f0', bodyColor:'#8892a4', padding:10, cornerRadius:8 } }
+};
+
+function buildDoughnut(id, labels, data, colors) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id).getContext('2d'), {
+    type:'doughnut',
+    data: { labels, datasets:[{ data, backgroundColor:colors, borderWidth:0, hoverOffset:6 }] },
+    options: { cutout:'72%', responsive:true, maintainAspectRatio:true, animation:{ animateScale:true, duration:600 }, plugins:{ ...chartDefaults.plugins } }
+  });
+}
+
+function buildLine(id, labels, datasets) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id).getContext('2d'), {
+    type:'line',
+    data: { labels, datasets },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ intersect:false, mode:'index' },
+      scales: {
+        x: { grid:{ color:'#1e2130' }, ticks:{ color:'#8892a4', font:{ size:11 } } },
+        y: { grid:{ color:'#1e2130' }, ticks:{ color:'#8892a4', font:{ size:11 } }, min:-1, max:1 }
+      },
+      animation:{ duration:600 },
+      plugins:{ ...chartDefaults.plugins }
+    }
+  });
+}
+
+function buildBar(id, labels, data) {
+  if (charts[id]) charts[id].destroy();
+  const palette = ['#6366f1','#818cf8','#a5b4fc','#c7d2fe','#e0e7ff','#4f46e5','#10b981','#f59e0b','#ef4444','#60a5fa','#a855f7','#f97316'];
+  charts[id] = new Chart(document.getElementById(id).getContext('2d'), {
+    type:'bar',
+    data: { labels, datasets:[{ data, backgroundColor:data.map((_,i)=>palette[i%palette.length]), borderRadius:6, borderSkipped:false }] },
+    options: {
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      scales: {
+        x: { grid:{ color:'#1e2130' }, ticks:{ color:'#8892a4', font:{ size:11 } } },
+        y: { grid:{ display:false }, ticks:{ color:'#e2e8f0', font:{ size:12 } } }
+      },
+      animation:{ duration:600 },
+      plugins:{ ...chartDefaults.plugins }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════
+// COMPUTE (local aggregations — replace API calls)
+// ═══════════════════════════════════════════════
+function computeOverview(records) {
+  const total = records.length;
+  const audited = records.filter(r => r.audit_status === 'human_reviewed' || r.audit_status === 'audited').length;
+  const pending = records.filter(r => r.audit_status === 'pending').length;
+  const resolved = records.filter(r => r.resolution_status === 'resolved').length;
+  const escalated = records.filter(r => r.resolution_status === 'escalated').length;
+  const aiScores = records.map(r => r.ai_score).filter(v => v != null && !isNaN(v));
+  const humanScores = records.map(r => r.human_score).filter(v => v != null && !isNaN(v));
+  const avgAi = aiScores.length ? aiScores.reduce((a,b)=>a+b,0)/aiScores.length : null;
+  const avgHuman = humanScores.length ? humanScores.reduce((a,b)=>a+b,0)/humanScores.length : null;
+
+  const mood_distribution = {};
+  ['positive','neutral','frustrated','angry','distressed'].forEach(k => {
+    mood_distribution[k] = records.filter(r => r.overall_mood === k).length;
+  });
+  const resolution_breakdown = {};
+  ['resolved','unresolved','escalated','partially_resolved','callback_promised'].forEach(k => {
+    resolution_breakdown[k] = records.filter(r => r.resolution_status === k).length;
+  });
+
+  return {
+    total_calls: total,
+    audited_calls: audited,
+    pending_calls: pending,
+    resolved_calls: resolved,
+    escalated_calls: escalated,
+    avg_ai_score: avgAi,
+    avg_human_score: avgHuman,
+    mood_distribution,
+    resolution_breakdown
+  };
+}
+
+function computeSentiment(records) {
+  const byDate = {};
+  records.forEach(r => {
+    if (!r.created_at) return;
+    const d = new Date(r.created_at).toISOString().split('T')[0];
+    if (!byDate[d]) byDate[d] = { opening:[], middle:[], closing:[] };
+    if (r.sentiment_opening != null) byDate[d].opening.push(Number(r.sentiment_opening));
+    if (r.sentiment_middle != null)  byDate[d].middle.push(Number(r.sentiment_middle));
+    if (r.sentiment_closing != null) byDate[d].closing.push(Number(r.sentiment_closing));
+  });
+  return Object.keys(byDate).sort().map(date => ({
+    date,
+    avg_opening: avg(byDate[date].opening),
+    avg_middle:  avg(byDate[date].middle),
+    avg_closing: avg(byDate[date].closing)
+  }));
+}
+
+function computeIssues(records) {
+  const counts = {};
+  records.forEach(r => {
+    const c = r.issue_category || 'Unknown';
+    counts[c] = (counts[c] || 0) + 1;
+  });
+  return Object.entries(counts).map(([category, total_calls]) => ({ category, total_calls }))
+    .sort((a,b) => b.total_calls - a.total_calls);
+}
+
+function computeAgents(records) {
+  const groups = {};
+  records.forEach(r => {
+    const key = r.agent_id || 0;
+    if (!groups[key]) groups[key] = { agent_id:r.agent_id, agent_name:r.agent_name, agent_email:r.agent_email, calls:[] };
+    groups[key].calls.push(r);
+  });
+  return Object.values(groups).map(g => {
+    const scores = g.calls.map(c => c.human_score != null ? c.human_score : c.ai_score).filter(v => v != null && !isNaN(v));
+    const resolved = g.calls.filter(c => c.resolution_status === 'resolved').length;
+    const moodScores = g.calls.map(c => MOOD_SCORE[c.overall_mood]).filter(v => v != null);
+    return {
+      agent_id: g.agent_id,
+      agent_name: g.agent_name,
+      agent_email: g.agent_email,
+      total_calls: g.calls.length,
+      avg_score: scores.length ? scores.reduce((a,b)=>a+b,0)/scores.length : null,
+      resolved_pct: g.calls.length ? (resolved/g.calls.length*100) : null,
+      avg_mood_score: moodScores.length ? moodScores.reduce((a,b)=>a+b,0)/moodScores.length : null
+    };
+  });
+}
+
+// ═══════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════
+function renderKPI(d) {
+  const totalCalls = d.total_calls || 0;
+  const resolvedPct = totalCalls > 0 ? ((d.resolved_calls||0)/totalCalls*100).toFixed(1) : 0;
+
+  const cards = [
+    { id:'kpi-total',     icon:'📞', label:'Total Calls',    value:(d.total_calls||0).toLocaleString(), sub:`${d.audited_calls||0} audited`,       glow:'#6366f1', color:'#818cf8' },
+    { id:'kpi-ai',        icon:'🤖', label:'Avg AI Score',   value:fmtScore(d.avg_ai_score),             sub:'Automated quality',                    glow:'#10b981', color:scoreColor(d.avg_ai_score) },
+    { id:'kpi-human',     icon:'👤', label:'Avg Human Score',value:fmtScore(d.avg_human_score),          sub:'Manual audit score',                   glow:'#f59e0b', color:scoreColor(d.avg_human_score) },
+    { id:'kpi-resolved',  icon:'✅', label:'Resolved %',     value:`${resolvedPct}%`,                     sub:`${d.resolved_calls||0} of ${totalCalls}`, glow:'#10b981', color:'#10b981' },
+    { id:'kpi-pending',   icon:'⏳', label:'Pending',        value:(d.pending_calls||0).toLocaleString(), sub:'Awaiting audit · click to view',       glow:'#f59e0b', color:'#f59e0b', clickable:'pending' },
+    { id:'kpi-escalated', icon:'🚨', label:'Escalated',      value:(d.escalated_calls||0).toLocaleString(), sub:'Needs attention · click to view',    glow:'#ef4444', color:'#ef4444', clickable:'escalated' }
+  ];
+
+  cards.forEach(c => {
+    const el = document.getElementById(c.id);
+    if (c.clickable) { el.style.cursor = 'pointer'; el.onclick = () => applyKpiFilter(c.clickable); }
+    el.innerHTML = `
+      <div class="kpi-glow" style="background:${c.glow};"></div>
+      <div style="padding:18px 20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:600;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;">${c.label}</div>
+          <span style="font-size:20px;">${c.icon}</span>
+        </div>
+        <div style="font-size:28px;font-weight:800;color:${c.color};line-height:1;margin-bottom:8px;">${c.value}</div>
+        <div style="font-size:11px;color:#8892a4;">${c.sub}</div>
+      </div>`;
+    el.style.boxShadow = (c.clickable && kpiFilter?.type === c.clickable) ? `0 0 0 2px ${c.color}` : '';
+  });
+}
+
+function renderLegend(containerId, entries) {
+  const total = entries.reduce((s,e) => s + e.value, 0);
+  document.getElementById(containerId).innerHTML = entries.map(e => {
+    const pct = total > 0 ? (e.value/total*100).toFixed(1) : 0;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="width:10px;height:10px;border-radius:50%;background:${e.color};flex-shrink:0;"></span>
+        <span style="font-size:12px;color:#e2e8f0;text-transform:capitalize;">${e.label.replace(/_/g,' ')}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:12px;font-weight:700;color:${e.color};">${e.value.toLocaleString()}</span>
+        <span style="font-size:11px;color:#8892a4;min-width:38px;text-align:right;">${pct}%</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderAgents(agents) {
+  document.getElementById('agent-count-label').textContent = `${agents.length} agents total`;
+  const sorted = [...agents].sort((a,b) => {
+    const av = a[agentSort.col] ?? -Infinity, bv = b[agentSort.col] ?? -Infinity;
+    if (typeof av === 'string') return agentSort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    return agentSort.dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+  });
+  const medals = ['🥇','🥈','🥉'];
+  document.getElementById('agents-tbody').innerHTML = sorted.map((ag,i) => `
+    <tr>
+      <td style="color:#8892a4;font-size:12px;">${medals[i] || (i+1)}</td>
+      <td>
+        <div style="font-size:13px;font-weight:600;color:#e2e8f0;">${ag.agent_name || '—'}</div>
+        <div style="font-size:11px;color:#8892a4;">${ag.agent_email || ''}</div>
+      </td>
+      <td style="text-align:right;font-weight:600;">${(ag.total_calls||0).toLocaleString()}</td>
+      <td>
+        <div class="score-bar-wrap">
+          <div class="score-bar-bg"><div class="score-bar-fill" style="width:${ag.avg_score||0}%;background:${scoreColor(ag.avg_score)};"></div></div>
+          <span style="font-size:13px;font-weight:700;color:${scoreColor(ag.avg_score)};min-width:38px;">${fmtScore(ag.avg_score)}</span>
+        </div>
+      </td>
+      <td style="text-align:right;"><span class="badge ${scoreBadgeClass(ag.resolved_pct)}">${ag.resolved_pct != null ? ag.resolved_pct.toFixed(1)+'%' : '—'}</span></td>
+      <td style="text-align:right;font-weight:600;color:${scoreColor((ag.avg_mood_score||0)*100)};">${ag.avg_mood_score != null ? ag.avg_mood_score.toFixed(2) : '—'}</td>
+    </tr>`).join('');
+
+  document.querySelectorAll('#agents-table th.sortable').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.dataset.col === agentSort.col) th.classList.add('sort-' + agentSort.dir);
+    th.onclick = () => {
+      if (agentSort.col === th.dataset.col) agentSort.dir = agentSort.dir === 'asc' ? 'desc' : 'asc';
+      else { agentSort.col = th.dataset.col; agentSort.dir = 'desc'; }
+      renderAgents(agents);
+    };
+  });
+}
+
+function parseFlags(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string') { try { const p = JSON.parse(val); return Array.isArray(p) ? p : [val]; } catch { return val.split(',').map(s => s.trim()).filter(Boolean); } }
+  return [];
+}
+
+function renderCalls(records) {
+  const total = records.length;
+  const perPage = PER_PAGE;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  if (callsPage > totalPages) callsPage = totalPages;
+  const start = (callsPage - 1) * perPage;
+  const pageRecords = records.slice(start, start + perPage);
+
+  document.getElementById('calls-count-label').textContent = `${total.toLocaleString()} calls total · click row to expand`;
+  document.getElementById('calls-page-label').textContent = callsPage;
+  document.getElementById('pagination-info').textContent = total === 0
+    ? 'No records match the current filters' 
+    : `Showing ${start+1}–${Math.min(start+perPage, total)} of ${total.toLocaleString()}`;
+
+  const tbody = document.getElementById('calls-tbody');
+  tbody.innerHTML = '';
+  if (pageRecords.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;color:#8892a4;padding:30px;">No records found.</td></tr>`;
+  }
+  pageRecords.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.className = 'data-row';
+    tr.innerHTML = `
+      <td style="font-size:12px;color:#8892a4;font-family:monospace;">${r.external_call_id || r.id || '—'}</td>
+      <td>
+        <div style="font-size:13px;font-weight:600;">${r.agent_name || '—'}</div>
+        <div style="font-size:11px;color:#8892a4;">${r.agent_email || ''}</div>
+      </td>
+      <td><span class="badge badge-gray">${r.call_direction || '—'}</span></td>
+      <td style="font-size:13px;color:#8892a4;">${fmtDuration(r.duration_seconds)}</td>
+      <td style="font-size:12px;color:#8892a4;">${r.issue_category || '—'}</td>
+      <td><span class="badge ${MOOD_BG[r.overall_mood] || 'badge-gray'}">${r.overall_mood || '—'}</span></td>
+      <td><span class="badge ${RES_BG[r.resolution_status] || 'badge-gray'}">${(r.resolution_status||'—').replace(/_/g,' ')}</span></td>
+      <td onclick="event.stopPropagation(); openScoreBreakdown(${r.id})"
+          style="cursor:pointer;" title="Click to view score breakdown">
+        <span class="${scoreClass(r.ai_score)}" style="font-weight:700;border-bottom:1px dashed currentColor;">${fmtScore(r.ai_score)}</span>
+      </td>
+      <td><span class="${scoreClass(r.human_score)}" style="font-weight:700;">${fmtScore(r.human_score)}</span></td>
+      <td><span class="badge ${STATUS_BG[r.audit_status] || 'badge-gray'}">${r.audit_status || '—'}</span></td>
+      <td style="font-size:12px;color:#8892a4;white-space:nowrap;">${fmtDate(r.created_at)}</td>
+      <td onclick="event.stopPropagation()">
+        <button class="btn-listen" onclick="openCallDetail(${r.id})">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Listen
+        </button>
+      </td>`;
+    tr.onclick = () => toggleExpand(tr, r);
+    tbody.appendChild(tr);
+  });
+
+  renderPagination(total, callsPage, perPage);
+}
+
+function getSliderColorClass(v) { if (v > 75) return 'green'; if (v >= 50) return 'yellow'; return 'red'; }
+
+function toggleExpand(tr, r) {
+  const existing = document.getElementById('expanded-' + r.id);
+  if (existing) { existing.remove(); expandedRow = null; return; }
+  if (expandedRow) { const old = document.getElementById('expanded-' + expandedRow); if(old) old.remove(); }
+  expandedRow = r.id;
+
+  const hasExistingScore = r.human_score != null && r.human_score !== '' && r.human_score !== 0;
+  const prefillScore = hasExistingScore ? r.human_score : 50;
+  const prefillRemarks = r.qa_remarks || '';
+  const sliderClass = getSliderColorClass(prefillScore);
+
+  const sops = Array.isArray(r.sop_compliance) ? r.sop_compliance : (typeof r.sop_compliance === 'string' ? (() => { try { return JSON.parse(r.sop_compliance); } catch { return []; } })() : []);
+  const followed = sops.filter(s => s.status === 'followed');
+  const violated = sops.filter(s => s.status !== 'followed');
+
+  const expTr = document.createElement('tr');
+  expTr.id = 'expanded-' + r.id;
+  expTr.className = 'expanded-row';
+  expTr.innerHTML = `<td colspan="12"><div class="expanded-content">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div>
+        <div style="font-size:11px;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Auto Summary</div>
+        <div style="font-size:13px;color:#e2e8f0;line-height:1.6;">${r.auto_summary || 'No summary available.'}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Call Details</div>
+        <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">
+          <div style="display:flex;justify-content:space-between;"><span style="color:#8892a4;">Sentiment Trajectory</span><span style="color:#e2e8f0;">${r.sentiment_trajectory || '—'}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#8892a4;">Agent Tone</span><span style="color:#e2e8f0;">${r.agent_tone || '—'}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#8892a4;">Direction</span><span style="color:#e2e8f0;">${r.call_direction || '—'}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#8892a4;">Duration</span><span style="color:#e2e8f0;">${fmtDuration(r.duration_seconds)}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#8892a4;">Audit Status</span><span><span class="badge ${STATUS_BG[r.audit_status]||'badge-gray'}">${(r.audit_status||'—').replace(/_/g,' ')}</span></span></div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Score Breakdown</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="font-size:12px;color:#8892a4;">AI Score</span><span style="font-size:12px;font-weight:700;color:${scoreColor(r.ai_score)};">${fmtScore(r.ai_score)}</span></div>
+            <div class="score-bar-bg"><div class="score-bar-fill" style="width:${r.ai_score||0}%;background:${scoreColor(r.ai_score)};"></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="font-size:12px;color:#8892a4;">Human Score</span><span style="font-size:12px;font-weight:700;color:${scoreColor(r.human_score)};">${fmtScore(r.human_score)}</span></div>
+            <div class="score-bar-bg"><div class="score-bar-fill" style="width:${r.human_score||0}%;background:${scoreColor(r.human_score)};"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div>
+        <div style="font-size:11px;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Alert Flags</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">${parseFlags(r.alert_flags).length ? parseFlags(r.alert_flags).map(f => `<span class="badge badge-red">⚠ ${f}</span>`).join('') : '<span style="font-size:12px;color:#8892a4;">None</span>'}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Compliance Flags</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">${parseFlags(r.compliance_flags).length ? parseFlags(r.compliance_flags).map(f => `<span class="badge badge-orange">⛨ ${f}</span>`).join('') : '<span style="font-size:12px;color:#8892a4;">None</span>'}</div>
+      </div>
+    </div>
+
+    ${sops.length ? `<div style="margin-bottom:16px;">
+      <div style="font-size:11px;color:#8892a4;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+        SOP Compliance
+        <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:rgba(16,185,129,0.15);color:#10b981;">${followed.length} Followed</span>
+        ${violated.length ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:rgba(239,68,68,0.15);color:#ef4444;">${violated.length} Violated</span>` : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${sops.map(s => {
+          const isFollowed = s.status === 'followed';
+          const borderColor = isFollowed ? '#10b981' : '#ef4444';
+          const bgColor = isFollowed ? 'rgba(16,185,129,0.06)' : 'rgba(239,68,68,0.06)';
+          const iconColor = isFollowed ? '#10b981' : '#ef4444';
+          const icon = isFollowed
+            ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`
+            : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${iconColor}" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+          return `<div style="border-left:3px solid ${borderColor};background:${bgColor};border-radius:0 6px 6px 0;padding:10px 12px;display:flex;align-items:flex-start;gap:10px;">
+            <div style="margin-top:1px;flex-shrink:0;">${icon}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <span style="font-size:13px;font-weight:600;color:#e2e8f0;">${s.title || '—'}</span>
+                <span style="font-size:11px;padding:1px 7px;border-radius:10px;background:${isFollowed ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'};color:${iconColor};font-weight:600;text-transform:capitalize;">${s.status}</span>
+              </div>
+              ${s.evidence ? `<div style="font-size:12px;color:#8892a4;line-height:1.5;">${s.evidence}</div>` : ''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+
+    <div class="qa-form">
+      <div style="font-size:13px;font-weight:700;color:#e2e8f0;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        QA Scoring ${hasExistingScore ? '<span class="badge badge-blue" style="font-weight:400;">Previously Scored</span>' : ''}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px;">
+        <div>
+          <label>Human Score</label>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <input type="range" min="0" max="100" step="0.5" value="${prefillScore}" class="qa-slider ${sliderClass}" id="qa-slider-${r.id}" oninput="updateScoreDisplay(${r.id}, this.value)"/>
+            <span id="qa-score-val-${r.id}" style="font-size:20px;font-weight:800;min-width:50px;text-align:center;color:${scoreColor(prefillScore)};">${Number(prefillScore).toFixed(1)}</span>
+          </div>
+        </div>
+        <div>
+          <label>QA Remarks</label>
+          <textarea class="qa-textarea" id="qa-remarks-${r.id}" placeholder="Enter QA remarks...">${prefillRemarks}</textarea>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <label class="toggle-switch">
+            <input type="checkbox" id="qa-dispute-${r.id}" onchange="updateDisputeBtn(${r.id})"/>
+            <span class="toggle-slider"></span>
+          </label>
+          <span style="font-size:12px;color:#8892a4;">Dispute AI Score</span>
+        </div>
+        <button class="btn-submit-score" id="qa-submit-${r.id}" onclick="submitScore(${r.id})">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span id="qa-submit-text-${r.id}">Submit Score</span>
+        </button>
+      </div>
+    </div>
+  </div></td>`;
+  tr.insertAdjacentElement('afterend', expTr);
+}
+
+function updateScoreDisplay(id, val) {
+  const num = parseFloat(val);
+  const display = document.getElementById('qa-score-val-' + id);
+  const slider = document.getElementById('qa-slider-' + id);
+  display.textContent = num.toFixed(1);
+  display.style.color = scoreColor(num);
+  slider.className = 'qa-slider ' + getSliderColorClass(num);
+}
+
+function updateDisputeBtn(id) {
+  const disputed = document.getElementById('qa-dispute-' + id).checked;
+  const btn = document.getElementById('qa-submit-' + id);
+  const btnText = document.getElementById('qa-submit-text-' + id);
+  btn.classList.toggle('dispute', disputed);
+  btnText.textContent = disputed ? 'Submit Dispute' : 'Submit Score';
+}
+
+// Local-only score submission — mutates in-memory record
+function submitScore(id) {
+  const score = parseFloat(document.getElementById('qa-slider-' + id).value);
+  const remarks = document.getElementById('qa-remarks-' + id).value.trim();
+  const isDisputed = document.getElementById('qa-dispute-' + id).checked;
+
+  const rec = DATA.find(r => r.id === id);
+  if (!rec) { toast('Record not found', 'error'); return; }
+  rec.human_score = score;
+  rec.qa_remarks = remarks;
+  rec.audit_status = isDisputed ? 'disputed' : 'human_reviewed';
+
+  toast(isDisputed ? 'Dispute saved (local only)' : 'Score saved (local only)', 'success');
+
+  const expRow = document.getElementById('expanded-' + id);
+  if (expRow) { expRow.remove(); expandedRow = null; }
+  refreshAll();
+}
+
+// ═══════════════════════════════════════════════
+// PAGINATION
+// ═══════════════════════════════════════════════
+function renderPagination(total, page, perPage) {
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const container = document.getElementById('pagination-btns');
+  container.innerHTML = '';
+
+  const addBtn = (label, pg, active = false, disabled = false) => {
+    const btn = document.createElement('button');
+    btn.className = 'page-btn' + (active ? ' active' : '');
+    btn.textContent = label;
+    btn.disabled = disabled;
+    if (!disabled) btn.onclick = () => { callsPage = pg; refreshAll(); };
+    container.appendChild(btn);
+  };
+
+  addBtn('‹', page - 1, false, page <= 1);
+  const range = [], delta = 2;
+  for (let i = Math.max(1, page-delta); i <= Math.min(totalPages, page+delta); i++) range.push(i);
+  if (range[0] > 1) { addBtn(1, 1); if (range[0] > 2) container.insertAdjacentHTML('beforeend', '<span style="color:#8892a4;padding:0 4px;line-height:32px;">…</span>'); }
+  range.forEach(p => addBtn(p, p, p === page));
+  if (range[range.length-1] < totalPages) { if (range[range.length-1] < totalPages-1) container.insertAdjacentHTML('beforeend', '<span style="color:#8892a4;padding:0 4px;line-height:32px;">…</span>'); addBtn(totalPages, totalPages); }
+  addBtn('›', page + 1, false, page >= totalPages);
+}
+
+// ═══════════════════════════════════════════════
+// MAIN REFRESH
+// ═══════════════════════════════════════════════
+function refreshAll(manual = false) {
+  const filters = getFilters();
+  const filtered = applyFilters(DATA, filters);
+
+  // KPIs
+  const overview = computeOverview(filtered);
+  renderKPI(overview);
+
+  // Mood doughnut
+  const moodKeys = ['positive','neutral','frustrated','angry','distressed'];
+  const moodVals = moodKeys.map(k => overview.mood_distribution[k] || 0);
+  const moodCols = moodKeys.map(k => MOOD_COLORS[k]);
+  buildDoughnut('moodChart', moodKeys, moodVals, moodCols);
+  document.getElementById('mood-total-num').textContent = moodVals.reduce((a,b)=>a+b,0).toLocaleString();
+  renderLegend('mood-legend', moodKeys.map((k,i) => ({ label:k, value:moodVals[i], color:moodCols[i] })));
+
+  // Resolution doughnut
+  const resKeys = ['resolved','unresolved','escalated','partially_resolved','callback_promised'];
+  const resVals = resKeys.map(k => overview.resolution_breakdown[k] || 0);
+  const resCols = resKeys.map(k => RES_COLORS[k]);
+  buildDoughnut('resolutionChart', resKeys.map(k => k.replace(/_/g,' ')), resVals, resCols);
+  document.getElementById('res-total-num').textContent = resVals.reduce((a,b)=>a+b,0).toLocaleString();
+  renderLegend('resolution-legend', resKeys.map((k,i) => ({ label:k, value:resVals[i], color:resCols[i] })));
+
+  // Sentiment trend
+  const trend = computeSentiment(filtered);
+  const labels = trend.map(t => new Date(t.date).toLocaleDateString('en-IN', { day:'2-digit', month:'short' }));
+  buildLine('sentimentChart', labels, [
+    { label:'Opening', data: trend.map(t=>t.avg_opening), borderColor:'#6366f1', backgroundColor:'rgba(99,102,241,0.1)', tension:0.4, fill:true,  pointRadius:3, pointHoverRadius:5 },
+    { label:'Middle',  data: trend.map(t=>t.avg_middle),  borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.08)', tension:0.4, fill:false, pointRadius:3, pointHoverRadius:5 },
+    { label:'Closing', data: trend.map(t=>t.avg_closing), borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,0.08)', tension:0.4, fill:false, pointRadius:3, pointHoverRadius:5 }
+  ]);
+
+  // Issues
+  const cats = computeIssues(filtered).slice(0,12);
+  buildBar('issuesChart', cats.map(c=>c.category), cats.map(c=>c.total_calls));
+
+  // Agents
+  renderAgents(computeAgents(filtered));
+
+  // Calls table
+  const sortedRecords = [...filtered].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  renderCalls(sortedRecords);
+
+  if (manual) toast('Dashboard refreshed', 'success');
+}
+
+// Initial render
+refreshAll();
+</script>
+</body>
+</html>
