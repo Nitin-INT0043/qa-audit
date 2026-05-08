@@ -677,28 +677,126 @@ function renderCallsTable(records) {
   btns.appendChild(mkBtn('Next ›', () => { callsPage = Math.min(totalPages, callsPage+1); refreshAll(); }, callsPage === totalPages));
 }
 
+function parseSummarySentences(text) {
+  return (text || '').replace(/\n/g, ' ').split(/\.\s+/).map(s => s.trim().replace(/\.+$/, '')).filter(Boolean);
+}
+
+function getCallReason(r) {
+  const sents = parseSummarySentences(r.auto_summary);
+  // First sentence that describes what the customer did/wanted
+  const hit = sents.find(s => /called|contacted|seeking|asking|inquir|requested|looking for|wanted|to (check|track|know|get|update|resolve)/i.test(s));
+  if (hit) return hit + '.';
+  // Fallback: first sentence of summary (it usually describes the call context)
+  if (sents.length) return sents[0] + '.';
+  return r.issue_category || '—';
+}
+
+function getDisconnectionReason(r) {
+  const sents = parseSummarySentences(r.auto_summary);
+  if (!sents.length) return null;
+  // Prefer a sentence that explicitly describes how the call ended
+  const endSent = sents.slice().reverse().find(s =>
+    /ended|concluded|closed|progress|resolved|escalated|callback|transfer|disconnect|beyond this point|no further|final|last|without resolv/i.test(s)
+  );
+  if (endSent) return endSent + '.';
+  // Otherwise last sentence of summary is usually the conclusion
+  return sents[sents.length - 1] + '.';
+}
+
+function getUnderstandingGap(r) {
+  const sents = parseSummarySentences(r.auto_summary);
+  const sd = r.score_details || {};
+  const sentFlags = Array.isArray(r.sentiment_flags) ? r.sentiment_flags : [];
+  const parts = [];
+
+  // 1. Actual problematic phrases flagged from the transcript
+  if (sentFlags.length) {
+    parts.push({ label: 'Flagged transcript phrases', value: sentFlags.slice(0, 2).map(f => `"${f.slice(0, 120)}"`).join(' · ') });
+  }
+
+  // 2. Auto-summary sentences that describe confusion or lack of clarity
+  const confSent = sents.find(s => /confus|unclear|lacks clarity|no response|not captur|not provid|no further detail|fails to|without address|no interaction|no further/i.test(s));
+  if (confSent) parts.push({ label: 'From summary', value: confSent + '.' });
+
+  // 3. Score-based signals (direct from data, not invented)
+  const al = sd.active_listening, ps = sd.problem_solving;
+  if (al != null && al === 0) parts.push({ label: 'Active listening score', value: '0 / 10 — agent did not demonstrate listening' });
+  else if (al != null && al <= 4) parts.push({ label: 'Active listening score', value: `${al} / 10` });
+  if (ps != null && ps === 0) parts.push({ label: 'Problem solving score', value: '0 / 15 — issue not identified or addressed' });
+  else if (ps != null && ps <= 5) parts.push({ label: 'Problem solving score', value: `${ps} / 15` });
+
+  return parts;
+}
+
 function renderExpandedRow(r) {
-  const summary    = r.auto_summary || '<em style="color:var(--text-muted);">No summary</em>';
-  const transcript = r.transcript_text || '<em style="color:var(--text-muted);">No transcript</em>';
-  const flags = (Array.isArray(r.alert_flags) && r.alert_flags.length) ? r.alert_flags.map(f => `<span class="pill" style="border-color:#7f1d1d;color:#fca5a5;">${f.replace(/_/g,' ')}</span>`).join(' ') : '<span style="color:var(--text-muted);font-size:12px;">No alerts</span>';
-  const sentFlags = (Array.isArray(r.sentiment_flags) && r.sentiment_flags.length) ? r.sentiment_flags.slice(0,3).map(f => `<div style="font-size:12px;color:var(--text-muted);font-style:italic;">"${(f||'').slice(0,150)}"</div>`).join('') : '';
+  const callReason = getCallReason(r);
+  const discReason = getDisconnectionReason(r);
+  const ugapParts  = getUnderstandingGap(r);
+
+  const summary    = r.auto_summary || '<em style="color:var(--text-muted);">No summary available</em>';
+  const transcript = r.transcript_text || '<em style="color:var(--text-muted);">No transcript available</em>';
+  const flags = (Array.isArray(r.alert_flags) && r.alert_flags.length)
+    ? r.alert_flags.map(f => `<span class="pill" style="border-color:#7f1d1d;color:#fca5a5;">${f.replace(/_/g,' ')}</span>`).join(' ')
+    : '<span style="color:var(--text-muted);font-size:12px;">None</span>';
+  const sentFlags = (Array.isArray(r.sentiment_flags) && r.sentiment_flags.length)
+    ? r.sentiment_flags.slice(0,3).map(f => `<div style="font-size:12px;color:var(--text-muted);font-style:italic;margin-top:4px;">"${(f||'').slice(0,160)}"</div>`).join('')
+    : '';
+
+  const ugapHtml = ugapParts.length
+    ? ugapParts.map(p => `
+        <div style="margin-bottom:6px;">
+          <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);font-weight:600;">${p.label}: </span>
+          <span style="font-size:12px;color:#f59e0b;">${p.value}</span>
+        </div>`).join('')
+    : `<span style="font-size:12px;color:#10b981;">No understanding gap detected from available data</span>`;
+
   return `
     <tr class="expanded-row"><td colspan="10">
-      <div class="expanded-content">
-        <div class="expanded-section">
-          <h4>Auto Summary</h4>
-          <p>${summary}</p>
-          <div style="margin-top:14px;">
-            <h4>Alert Flags</h4>
-            <div style="display:flex;flex-wrap:wrap;gap:6px;">${flags}</div>
+      <div style="padding:18px;border-top:1px solid var(--border);animation:expandDown 0.2s ease;">
+
+        <!-- 4-column insight strip -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">
+
+          <div class="card2" style="padding:12px 14px;">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:600;margin-bottom:7px;">Issue Category</div>
+            <div style="font-size:13px;font-weight:500;color:var(--text-primary);">${r.issue_category || '—'}</div>
           </div>
-          ${sentFlags ? `<div style="margin-top:14px;"><h4>Sentiment Flags</h4>${sentFlags}</div>` : ''}
-          ${r.audio_url ? `<div style="margin-top:14px;"><a href="${r.audio_url}" target="_blank" rel="noopener" style="color:var(--accent2);font-size:12px;text-decoration:none;">↳ Listen to recording</a></div>` : ''}
+
+          <div class="card2" style="padding:12px 14px;">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:600;margin-bottom:7px;">Reasons for Calling</div>
+            <div style="font-size:12px;color:var(--text-primary);line-height:1.5;">${callReason}</div>
+          </div>
+
+          <div class="card2" style="padding:12px 14px;">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:600;margin-bottom:7px;">Call Disconnection Reason</div>
+            <div style="font-size:12px;color:var(--text-primary);line-height:1.5;">${discReason || '—'}</div>
+          </div>
+
+          <div class="card2" style="padding:12px 14px;">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:600;margin-bottom:7px;">Understanding Gap (Caller)</div>
+            ${ugapHtml}
+          </div>
+
         </div>
-        <div class="expanded-section">
-          <h4>Transcript Excerpt</h4>
-          <p style="max-height:280px;overflow-y:auto;font-style:italic;color:var(--text-muted);font-size:12px;line-height:1.7;">${transcript}</p>
+
+        <!-- Summary + Transcript -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div class="expanded-section">
+            <h4>Auto Summary</h4>
+            <p>${summary}</p>
+            <div style="margin-top:14px;">
+              <h4>Alert Flags</h4>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">${flags}</div>
+            </div>
+            ${sentFlags ? `<div style="margin-top:14px;"><h4>Sentiment Flags</h4>${sentFlags}</div>` : ''}
+            ${r.audio_url ? `<div style="margin-top:14px;"><a href="${r.audio_url}" target="_blank" rel="noopener" style="color:var(--accent2);font-size:12px;text-decoration:none;">↳ Listen to recording</a></div>` : ''}
+          </div>
+          <div class="expanded-section">
+            <h4>Transcript Excerpt</h4>
+            <p style="max-height:280px;overflow-y:auto;font-style:italic;color:var(--text-muted);font-size:12px;line-height:1.7;">${transcript}</p>
+          </div>
         </div>
+
       </div>
     </td></tr>`;
 }
